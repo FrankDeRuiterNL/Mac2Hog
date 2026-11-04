@@ -1,1 +1,126 @@
 # Mac2Hog
+
+A native macOS app that turns a song into a light show on an **ETC / High End Systems Hog 4** console
+(Hog 4, Full Boar 4, Road Hog 4, Nano Hog 4, Hedgehog 4/4X, Hog 4 PC), controlled over **OSC**.
+
+1. **Import a song** (`.wav` or `.mp3`, also `.aiff`, `.m4a`).
+2. Mac2Hog **analyses** it: main tempo (with alternatives), beat grid and bars, **snare hits**, kick hits,
+   **breaks**, and **song parts** (intro, verse, build-up, chorus/drop, break, bridge, outro).
+3. It generates **SMPTE timecode** for the whole song (24/25/29.97df/30 fps, starting at e.g. `01:00:00:00`).
+4. **Import your Hog 4 show** (XML export or CSV) and attach its **cuelists, scenes and macros** to cues
+   on the song timeline. Mac2Hog converts them into the correct Hog 4 OSC messages.
+5. Run the show:
+   - **Timecode mode** – press Play (Space) and every cue fires automatically at its timecode.
+   - **Manual mode** – the cues form a cue stack; press **Space** to fire the next cue (GO).
+
+## Requirements
+
+- macOS 13 Ventura or later
+- Xcode 15+ (or the Swift 5.9+ toolchain) to build
+- A Hog 4 console / Hog 4 PC on the same network with OSC input enabled
+
+## Build & run
+
+```bash
+# Run directly
+swift run -c release Mac2Hog
+
+# Or build a double-clickable app bundle (build/Mac2Hog.app)
+./scripts/build-app.sh
+```
+
+You can also open `Package.swift` in Xcode and run the **Mac2Hog** scheme.
+
+Run the engine tests with `swift test` (the core engine also builds and tests on Linux).
+Every push builds the app and runs the tests on GitHub Actions; the built `Mac2Hog.app` is attached to the run as an artifact.
+
+## Setting up the Hog 4
+
+1. On the console: **Setup → Control Panel → Network** → enable **OSC In** and note the port (Mac2Hog uses 7001 by default).
+2. Optional: enable **OSC Out** to your Mac's IP / port 7002 to see console feedback in Mac2Hog's OSC log.
+3. In Mac2Hog: **Settings (⌘,) → Network** → enter the console IP and port and click *Send test message*.
+
+## Workflow
+
+| Step | Where |
+|---|---|
+| Import song / pick a recent one | *File › Import Song* (⌘I) or *Settings › Song* |
+| Correct the tempo (×2, ÷2, type a BPM, shift bar start) | Tempo field in the transport bar, *Song Analysis* tab |
+| Import the Hog showfile / pick a recent one | *File › Import Hog 4 Showfile* (⇧⌘I) or *Settings › Showfile* |
+| Generate cues from parts / breaks / snares / every N bars | **Generate Cues** button |
+| Add a cue | Double-click the waveform, ⌘T at the playhead, or **Start/End/Add trigger** in the *Song Analysis* tab |
+| Move a cue | Drag its flag on the waveform (snaps to the beat grid), or type a timecode in the inspector |
+| Attach console commands | Select a cue → inspector → **Add** (Go cuelist, goto cue, scene, macro, release, master go, fader, custom OSC) |
+| Same command on all snares | Inspector → *Copy to all Snare cues*, or attach it in Generate Cues |
+| Run | Space = play/pause (timecode) or GO (manual), Esc = stop |
+| Save | *File › Save Show* (⌘S) – `.mac2hog` project with song path, analysis, cues and show objects |
+| Export | Cue sheet CSV, LTC WAV, or song + LTC stereo WAV |
+
+### Timecode / LTC
+
+Mac2Hog fires cues itself from its internal timecode clock (a 4 ms high-priority timer locked to audio
+playback) and has a latency compensation setting. If you also want the Hog to chase timecode, enable
+*Settings › Timecode › Play LTC on the right channel* (song on the left) and feed the right channel into the
+Hog's LTC input, or export an LTC WAV.
+
+## Hog 4 OSC mapping
+
+From the Hog 4 OS manual, *OSC Mappings*:
+
+| Command | OSC |
+|---|---|
+| Go cuelist | `/hog/playback/go/0 <list>` |
+| Goto cue | `/hog/playback/go/0 <list>.<cue>` |
+| Halt / resume / release cuelist | `/hog/playback/halt|resume|release/0 <list>` |
+| Go / halt / release scene | `/hog/playback/go|halt|release/1 <scene>` |
+| Go / halt / release macro | `/hog/playback/go|halt|release/2 <macro>` |
+| Master go / pause / back | `/hog/hardware/go|pause|goback/<master> 1` then `0` |
+| Master fader | `/hog/hardware/fader/<master> 0–255` |
+| Main go / halt / back | `/hog/hardware/maingo|mainhalt|mainback 1` then `0` |
+
+Numbers are sent as OSC floats by default. *Settings › OSC* lets you switch to int or string. Use **string** for
+goto commands if your cue numbers have two decimals (cue `1.10` vs `1.1`). Any other address can be sent with a
+*Custom OSC* command.
+
+## Showfile import
+
+A native Hog 4 `.shw` show is a proprietary binary database that only Hog OS can read. Mac2Hog imports:
+
+- **Hog 4 XML exports**: in Hog 4 OS open the Cuelist, Scene or Macro directory, select the items and choose
+  *Export* (or export the show to XML). The parser accepts any element named like `Cuelist`/`Scene`/`Macro`
+  with a number/index attribute or child, plus their `Cue` children.
+- **CSV**: `type,number,name[,cue number,cue name]`, e.g. `cuelist,3,Chorus wash` or `scene,1,Blackout`.
+- Objects can also be **added by hand** in the *Show Objects* tab when you know the numbers.
+
+If you pick a `.shw` file, Mac2Hog explains how to export it.
+
+## How the analysis works
+
+All analysis runs on a 22.05 kHz mono copy of the song (`Sources/Mac2HogCore/Audio/AudioAnalyzer.swift`):
+
+- **Spectrum**: 1024-point STFT, hop 256 (≈11.6 ms resolution).
+- **Tempo**: autocorrelation of the spectral-flux onset envelope, weighted towards 120 BPM, then refined
+  to 0.05 BPM. Alternative tempi are offered.
+- **Beats**: dynamic-programming beat tracker; bar starts from where the kicks and backbeat snares fall.
+- **Snares**: linear-magnitude flux of the 1.2–5 kHz "rattle" band, boosted by the 150–400 Hz body and
+  suppressed when the onset is dominated by the kick band, then adaptive peak picking. Hits on beats 2 and 4
+  need less evidence. Sensitivity is adjustable.
+- **Song parts**: bar-level timbre + harmony + drum features → self-similarity matrix → novelty peaks,
+  snapped to phrases, grouped by similarity (A/B/C) and labelled by energy, repetition and position.
+- **Breaks**: bars where the drums disappear or the level drops well below the song's median.
+
+Analysis is a starting point. Every marker can be moved, and cues are only created where you want them.
+
+## Project layout
+
+```
+Sources/Mac2HogCore   platform-independent engine (unit tested)
+  Audio/              decoding (AVFoundation / WAV), FFT, analyzer
+  Hog/                show objects, showfile importer, command → OSC mapping
+  OSC/                OSC 1.0 encoder/decoder, UDP sender & listener
+  Show/               project model, cue generator, timecode runner, manual cue stack
+  Timecode/           SMPTE timecode (incl. drop-frame), LTC encoder/decoder
+  Settings/           persisted app settings
+Sources/Mac2Hog       SwiftUI macOS app
+Tests/Mac2HogCoreTests
+```
