@@ -2,9 +2,6 @@
   <img src="docs/mac2hog-header.png" alt="Mac2Hog — Taking control of the piggy right from you Mac" width="100%" />
 </p>
 
-<img width="1942" height="809" alt="image" src="https://github.com/user-attachments/assets/4a10e0dc-0acb-4295-bbb2-114ee52d5c7e" />
-
-
 A native macOS app that turns a song into a light show on an **ETC / High End Systems Hog 4 or Hog 5** console, controlled over **OSC**.
 
 1. **Import a song** (`.wav` or `.mp3`, also `.aiff`, `.m4a`).
