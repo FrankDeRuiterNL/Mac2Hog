@@ -71,14 +71,21 @@ final class AppState: ObservableObject {
     // MARK: Show document
     @Published var project = ShowProject() {
         didSet {
+            // @Published re-enters didSet when the property is written from inside it, so guard against recursion.
+            guard !isUpdatingProject else { return }
+            isUpdatingProject = true
+            defer { isUpdatingProject = false }
             // Keep the cue list ordered and Follow / Wait times up to date after every edit.
-            project.normalizeCues()
+            var normalized = project.triggers
+            CueTiming.normalize(&normalized)
+            if normalized != project.triggers { project.triggers = normalized }
             engine.setTriggers(project.triggers)
             cueStack = CueStack(triggers: project.triggers, keeping: cueStack)
             isDirty = true
             writeBackToSetlist()
         }
     }
+    private var isUpdatingProject = false
     @Published var projectURL: URL?
     @Published var isDirty = false
 
