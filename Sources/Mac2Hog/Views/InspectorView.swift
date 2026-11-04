@@ -198,47 +198,83 @@ struct CommandEditor: View {
         HogAction.allCases
     }
 
+    // Labels sit in a fixed left column and controls fill the rest. Every control hides its own
+    // label, otherwise a grouped Form puts the title on the left and pushes the control to the far right.
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Picker("Action", selection: $command.action) {
-                    ForEach(actions) { Text($0.displayName).tag($0) }
-                }
-                .labelsHidden()
-                .frame(maxWidth: 190)
-                if command.action.usesObject {
-                    Picker("Type", selection: $command.objectKind) {
-                        ForEach(HogObjectKind.allCases) { Text($0.displayName).tag($0) }
+        VStack(alignment: .leading, spacing: 8) {
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+                GridRow {
+                    label("Action")
+                    HStack(spacing: 8) {
+                        Picker("Action", selection: $command.action) {
+                            ForEach(actions) { Text($0.displayName).tag($0) }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                        if command.action.usesObject {
+                            Picker("Type", selection: $command.objectKind) {
+                                ForEach(HogObjectKind.allCases) { Text($0.displayName).tag($0) }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
+                        }
+                        Spacer(minLength: 0)
+                        Button(role: .destructive, action: onDelete) { Image(systemName: "minus.circle.fill") }
+                            .buttonStyle(.borderless)
+                            .foregroundStyle(.red)
+                            .help("Remove this command")
                     }
-                    .labelsHidden()
-                    .frame(width: 100)
                 }
-                Spacer()
-                Button(role: .destructive, action: onDelete) { Image(systemName: "minus.circle.fill") }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.red)
+                if command.action.usesObject {
+                    GridRow {
+                        label(command.objectKind.displayName)
+                        objectRow
+                    }
+                    if command.action == .gotoCue {
+                        GridRow {
+                            label("Cue")
+                            cueRow
+                        }
+                    }
+                }
+                if command.action.usesMaster {
+                    GridRow {
+                        label("Master")
+                        HStack {
+                            numberField("Master", value: $command.master)
+                            Stepper("", value: $command.master, in: 0...200).labelsHidden()
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    if command.action == .masterFader {
+                        GridRow {
+                            label("Level")
+                            HStack {
+                                Slider(value: $command.level, in: 0...100).labelsHidden()
+                                Text("\(Int(command.level))%").monospacedDigit().frame(width: 40, alignment: .trailing)
+                            }
+                        }
+                    }
+                }
+                if command.action == .custom {
+                    GridRow {
+                        label("Address")
+                        TextField("", text: $command.customAddress, prompt: Text("/hog/hardware/maingo"))
+                            .labelsHidden()
+                            .font(.body.monospaced())
+                    }
+                    GridRow {
+                        label("Arguments")
+                        TextField("", text: $command.customArguments, prompt: Text("e.g. 1 0.5 \"text\""))
+                            .labelsHidden()
+                            .font(.body.monospaced())
+                    }
+                }
             }
 
-            if command.action.usesObject {
-                objectRow
-                if command.action == .gotoCue { cueRow }
-                if !HogAction.actions(for: command.objectKind).contains(command.action) {
-                    Text("\(command.objectKind.displayName)s don't support \(command.action.displayName).")
-                        .font(.caption).foregroundStyle(.orange)
-                }
-            }
-            if command.action.usesMaster {
-                Stepper("Master \(command.master)", value: $command.master, in: 0...200)
-                if command.action == .masterFader {
-                    HStack {
-                        Slider(value: $command.level, in: 0...100)
-                        Text("\(Int(command.level))%").monospacedDigit().frame(width: 40)
-                    }
-                }
-            }
-            if command.action == .custom {
-                TextField("OSC address", text: $command.customAddress).font(.body.monospaced())
-                TextField("Arguments (e.g. 1 0.5 \"text\")", text: $command.customArguments).font(.body.monospaced())
+            if command.action.usesObject && !HogAction.actions(for: command.objectKind).contains(command.action) {
+                Text("\(command.objectKind.displayName)s don't support \(command.action.displayName).")
+                    .font(.caption).foregroundStyle(.orange)
             }
 
             Text(mapper.messages(for: command).map(\.description).joined(separator: "\n").ifEmpty("(invalid OSC address)"))
@@ -249,10 +285,26 @@ struct CommandEditor: View {
         .padding(.vertical, 4)
     }
 
+    private func label(_ text: String) -> some View {
+        Text(text)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .fixedSize()
+            .gridColumnAlignment(.trailing)
+    }
+
+    private func numberField(_ prompt: String, value: Binding<Int>) -> some View {
+        TextField("", value: value, format: .number.grouping(.never), prompt: Text(prompt))
+            .labelsHidden()
+            .multilineTextAlignment(.trailing)
+            .frame(width: 56)
+    }
+
+    /// Showfile picker (name + number) plus a number field for objects that aren't in the showfile.
     @ViewBuilder
     private var objectRow: some View {
         let objects = show?.objects(of: command.objectKind) ?? []
-        HStack {
+        HStack(spacing: 8) {
             if !objects.isEmpty {
                 Picker(command.objectKind.displayName, selection: Binding(
                     get: { command.objectNumber },
@@ -265,26 +317,40 @@ struct CommandEditor: View {
                         Text("\(command.objectNumber) (not in showfile)").tag(command.objectNumber)
                     }
                 }
+                .labelsHidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            TextField("No.", text: Binding(get: { command.objectNumber }, set: { n in
+            TextField("", text: Binding(get: { command.objectNumber }, set: { n in
                 command.objectNumber = n
                 command.label = show?.object(kind: command.objectKind, number: n)?.name ?? ""
-            }))
-            .frame(width: objects.isEmpty ? 80 : 50)
+            }), prompt: Text("No."))
+            .labelsHidden()
+            .multilineTextAlignment(.trailing)
+            .frame(width: 56)
+            .help("\(command.objectKind.displayName) number")
+            if objects.isEmpty { Spacer(minLength: 0) }
         }
     }
 
+    /// Cue picker from the imported cuelist plus a number field.
     @ViewBuilder
     private var cueRow: some View {
         let cues = show?.object(kind: command.objectKind, number: command.objectNumber)?.cues ?? []
-        HStack {
+        HStack(spacing: 8) {
             if !cues.isEmpty {
                 Picker("Cue", selection: $command.cueNumber) {
                     ForEach(cues) { Text("\($0.number)  \($0.name)").tag($0.number) }
                     if !cues.contains(where: { $0.number == command.cueNumber }) { Text(command.cueNumber).tag(command.cueNumber) }
                 }
+                .labelsHidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            TextField("Cue", text: $command.cueNumber).frame(width: cues.isEmpty ? 80 : 50)
+            TextField("", text: $command.cueNumber, prompt: Text("Cue"))
+                .labelsHidden()
+                .multilineTextAlignment(.trailing)
+                .frame(width: 56)
+                .help("Cue number")
+            if cues.isEmpty { Spacer(minLength: 0) }
         }
     }
 }

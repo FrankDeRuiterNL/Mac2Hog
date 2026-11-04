@@ -5,7 +5,7 @@ import Foundation
 /// Keep in sync with the `VERSION` file (checked by `VersionTests`); `scripts/build-app.sh`
 /// writes it into the app's Info.plist.
 public enum Mac2HogVersion {
-    public static let current = "0.1.3"
+    public static let current = "0.1.4"
 
     /// The running app's version: the bundle's Info.plist when packaged, otherwise `current`.
     public static var display: String {

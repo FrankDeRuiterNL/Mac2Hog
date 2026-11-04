@@ -3,6 +3,10 @@
 Mac2Hog follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The version lives in `VERSION`,
 `Sources/Mac2HogCore/Version.swift` and `Resources/Info.plist` (kept in sync by a unit test) and is bumped on every commit.
 
+## 0.1.4
+- Cue inspector: command editor laid out as a label/control grid so cuelist and cue pickers use the available
+  width instead of being pushed to the far right; number fields no longer show wrapped labels ("Cu e").
+
 ## 0.1.3
 - Rename setlist songs (right-click › Rename Song…); the name is used throughout the app, the audio file is untouched.
 - Settings › Song lists all setlist songs (or the current song) with Select File… and Re-analyze per song; Recent songs removed.
