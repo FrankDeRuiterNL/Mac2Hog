@@ -3,6 +3,15 @@
 Mac2Hog follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The version lives in `VERSION`,
 `Sources/Mac2HogCore/Version.swift` and `Resources/Info.plist` (kept in sync by a unit test) and is bumped on every commit.
 
+## 0.3.0
+- Fix: playhead no longer hitches when a cue fires. Fired/running cue state and the OSC log live in their own
+  observable objects (only the cue list, inspector and log redraw), network status is only published when it
+  changes, the position timer runs in all run-loop modes, and the playhead is interpolated at display rate.
+- Fix: cue list header no longer takes up half the list.
+- Inspector follows the last fired / running cue when *Follow* is on (clicking a cue still shows that cue).
+- OSC output panel is collapsed by default.
+- Main window opens filling the screen on first launch and then remembers its size and position.
+
 ## 0.2.0
 - Smoother playback: the playhead clock is a separate observable object, so the 30 Hz position updates only
   redraw the transport bar and a light playhead layer instead of the whole window (cue list, inspector, waveform).

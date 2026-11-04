@@ -200,7 +200,7 @@ struct WaveformTimeline: View {
         for t in state.project.triggers where t.time >= viewStart - 10 && t.time <= visibleEnd {
             let tx = x(of: t.time)
             let selected = t.id == state.selectedTriggerID
-            let fired = t.id == state.lastFiredID
+            let fired = false  // fired / running state is shown in the cue list (keeps the waveform from redrawing on every cue)
             let color: Color = !t.enabled ? .gray : (fired ? .green : (selected ? .yellow : .accentColor))
             ctx.stroke(Path { p in p.move(to: CGPoint(x: tx, y: sectionBand)); p.addLine(to: CGPoint(x: tx, y: size.height - 14)) },
                        with: .color(color),
@@ -224,11 +224,15 @@ private struct PlayheadLayer: View {
     let follow: Bool
 
     var body: some View {
-        GeometryReader { _ in
-            Rectangle()
-                .fill(Color.red)
-                .frame(width: 2)
-                .offset(x: CGFloat((playback.currentTime - viewStart) * zoom) - 1)
+        // Redrawn at display rate and extrapolated from the last player position, so the line glides
+        // smoothly even if a position update arrives a little late.
+        TimelineView(.animation(minimumInterval: nil, paused: !playback.isPlaying)) { context in
+            GeometryReader { _ in
+                Rectangle()
+                    .fill(Color.red)
+                    .frame(width: 2)
+                    .offset(x: CGFloat((playback.time(at: context.date) - viewStart) * zoom) - 1)
+            }
         }
         .allowsHitTesting(false)
         .onChange(of: playback.currentTime) { t in

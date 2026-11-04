@@ -126,12 +126,13 @@ final class AppState: ObservableObject {
     var isPlaying: Bool { playback.isPlaying }
     /// Follow the playhead / fired cues in the waveform and the cue list.
     @Published var followPlayhead = true
-    /// Cues fired recently whose duration hasn't elapsed yet (shown red in the cue list).
-    @Published private(set) var runningCueIDs: Set<UUID> = []
+    /// Last fired / running cue and inspector focus (separate observable, see CueActivity).
+    let activity = CueActivity()
+    var runningCueIDs: Set<UUID> { activity.runningCueIDs }
     private var runningTokens: [UUID: UUID] = [:]
     @Published private(set) var duration: Double = 0
     @Published var cueStack = CueStack(triggers: [])
-    @Published var lastFiredID: UUID?
+    var lastFiredID: UUID? { activity.lastFiredID }
 
     // MARK: Analysis
     @Published private(set) var isAnalyzing = false
@@ -140,8 +141,10 @@ final class AppState: ObservableObject {
     private var decodedAudio: MonoAudio?
 
     // MARK: UI
-    @Published var selectedTriggerID: UUID?
-    @Published var log: [OSCLogEntry] = []
+    @Published var selectedTriggerID: UUID? {
+        didSet { if activity.focusedCueID != selectedTriggerID { activity.focusedCueID = selectedTriggerID } }
+    }
+    let oscLog = OSCLogStore()
     @Published var networkStatus = "Not configured"
     @Published var networkOK = false
     @Published var alertMessage: String?
@@ -173,9 +176,12 @@ final class AppState: ObservableObject {
         }
         keyMonitor.start(onSpace: { [weak self] in self?.spacePressed() },
                          onEscape: { [weak self] in self?.stop() })
-        uiTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+        // Common run-loop modes: keep the playhead moving while lists scroll or menus are open.
+        let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refreshTransport() }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        uiTimer = timer
     }
 
     // MARK: - Settings & network
@@ -224,15 +230,24 @@ final class AppState: ObservableObject {
     // MARK: - Logging
 
     private func handle(_ event: ShowEngine.FireEvent) {
-        if let t = event.trigger {
-            if lastFiredID != t.id { lastFiredID = t.id }
+        if let t = event.trigger, project.triggers.contains(where: { $0.id == t.id }) {
+            if activity.lastFiredID != t.id { activity.lastFiredID = t.id }
             markRunning(t)
+            // Follow: the inspector shows the cue that just fired (without touching the list selection).
+            if followPlayhead, activity.focusedCueID != t.id { activity.focusedCueID = t.id }
         }
         let title = event.trigger.map { "\(project.timecode(at: event.songTime))  \($0.name)" } ?? "OSC"
         let detail = event.messages.isEmpty ? "(no commands)" : event.messages.map(\.description).joined(separator: "   ")
         appendLog(OSCLogEntry(songTime: event.songTime, title: title, detail: event.error.map { "\(detail)  ⚠︎ \($0)" } ?? detail,
                               isError: event.error != nil, incoming: false))
-        if event.error != nil { networkOK = false; networkStatus = event.error ?? "" } else if !event.messages.isEmpty { networkOK = true }
+        // Only publish real changes: every AppState change redraws the whole window.
+        if let error = event.error {
+            if networkOK { networkOK = false }
+            if networkStatus != error { networkStatus = error }
+        } else if !event.messages.isEmpty, !networkOK {
+            networkOK = true
+            configureNetwork()
+        }
     }
 
     /// A fired cue with a duration counts as running until its duration has elapsed.
@@ -241,18 +256,15 @@ final class AppState: ObservableObject {
         guard duration > 0 else { return }
         let token = UUID()
         runningTokens[trigger.id] = token
-        runningCueIDs.insert(trigger.id)
+        activity.runningCueIDs.insert(trigger.id)
         DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
             guard let self, self.runningTokens[trigger.id] == token else { return }
             self.runningTokens[trigger.id] = nil
-            self.runningCueIDs.remove(trigger.id)
+            self.activity.runningCueIDs.remove(trigger.id)
         }
     }
 
-    private func appendLog(_ entry: OSCLogEntry) {
-        log.append(entry)
-        if log.count > 500 { log.removeFirst(log.count - 500) }
-    }
+    private func appendLog(_ entry: OSCLogEntry) { oscLog.append(entry) }
 
     // MARK: - Transport
 
@@ -301,7 +313,7 @@ final class AppState: ObservableObject {
         phaseWork = nil
         phase = .idle
         engine.stop()
-        runningCueIDs = []
+        if !activity.runningCueIDs.isEmpty { activity.runningCueIDs = [] }
         runningTokens = [:]
         if settings.sendReleaseOnStop {
             var seen = Set<String>()
@@ -334,16 +346,12 @@ final class AppState: ObservableObject {
         guard let cue = chain.first?.trigger else { NSSound.beep(); return }
         engine.fire(cue)
         if chain.count > 1 { engine.schedule(Array(chain.dropFirst())) }
-        selectedTriggerID = cue.id
         // Follow along in the song so the waveform shows where we are.
         if !isPlaying && engine.hasAudio { seek(to: cue.time) }
     }
 
     func backCue() {
-        if let cue = cueStack.back() {
-            engine.fire(cue)
-            selectedTriggerID = cue.id
-        }
+        if let cue = cueStack.back() { engine.fire(cue) }
     }
 
     func setNextCue(_ id: UUID) { cueStack.select(id: id) }

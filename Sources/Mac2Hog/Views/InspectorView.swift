@@ -5,9 +5,11 @@ import Mac2HogCore
 
 struct InspectorView: View {
     @EnvironmentObject var state: AppState
+    @EnvironmentObject var activity: CueActivity
 
     var body: some View {
-        if let id = state.selectedTriggerID, let binding = state.binding(for: id) {
+        // The selected cue, or with Follow on the last fired / running cue.
+        if let id = activity.focusedCueID ?? state.selectedTriggerID, let binding = state.binding(for: id) {
             TriggerEditor(trigger: binding)
                 .id(id)
         } else {

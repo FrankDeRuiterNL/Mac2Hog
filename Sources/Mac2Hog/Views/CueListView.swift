@@ -5,6 +5,7 @@ import Mac2HogCore
 
 struct CueListView: View {
     @EnvironmentObject var state: AppState
+    @EnvironmentObject var activity: CueActivity
     @State private var selection = Set<UUID>()
 
     // Column widths shared by the header and the rows (flexible columns: Name, Console commands).
@@ -38,13 +39,15 @@ struct CueListView: View {
                 }
                 .onDeleteCommand { state.deleteTriggers(selection) }
                 .onChange(of: selection) { sel in
-                    if sel.count == 1, let id = sel.first, id != state.selectedTriggerID { state.selectedTriggerID = id }
+                    guard sel.count == 1, let id = sel.first else { return }
+                    if id != state.selectedTriggerID { state.selectedTriggerID = id }
+                    activity.focusedCueID = id   // clicking a cue always shows it in the inspector
                 }
                 .onChange(of: state.selectedTriggerID) { id in
                     if let id, !selection.contains(id) { selection = [id] }
                 }
                 // Follow: keep the last fired cue (or, in manual mode, the next cue) in view.
-                .onChange(of: state.lastFiredID) { id in
+                .onChange(of: activity.lastFiredID) { id in
                     guard state.followPlayhead, let id else { return }
                     withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .center) }
                 }
@@ -86,7 +89,7 @@ struct CueListView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Color.clear.frame(width: W.status)
+            Spacer().frame(width: W.status, height: 0)
             Text("#").frame(width: W.number, alignment: .trailing)
             Text("Timecode").frame(width: W.timecode, alignment: .leading)
             Text("Start").frame(width: W.start, alignment: .leading)
@@ -125,8 +128,8 @@ struct CueListView: View {
 
     /// Red = running (within its duration), purple = last fired, nil = normal row.
     private func highlightColor(_ t: ShowTrigger) -> Color? {
-        if state.runningCueIDs.contains(t.id) { return .red }
-        if t.id == state.lastFiredID { return .purple }
+        if activity.runningCueIDs.contains(t.id) { return .red }
+        if t.id == activity.lastFiredID { return .purple }
         return nil
     }
 
@@ -134,7 +137,7 @@ struct CueListView: View {
     private func statusIcon(_ t: ShowTrigger) -> some View {
         if state.mode == .manual && state.cueStack.next?.id == t.id {
             Image(systemName: "arrowtriangle.right.fill").foregroundStyle(.green).help("Next cue (Space)")
-        } else if t.id == state.lastFiredID {
+        } else if t.id == activity.lastFiredID {
             Image(systemName: "bolt.fill").foregroundStyle(.yellow)
         } else if t.commands.isEmpty {
             Image(systemName: "exclamationmark.circle").foregroundStyle(.orange).help("No console command attached")

@@ -74,10 +74,36 @@ struct GenerateTriggersSheet: View {
     }
 }
 
+/// Only this list observes the log, so new entries don't redraw anything else.
+private struct OSCLogList: View {
+    @EnvironmentObject var oscLog: OSCLogStore
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            List(oscLog.entries) { entry in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(entry.date, format: .dateTime.hour().minute().second())
+                        .foregroundStyle(.secondary)
+                    Text(entry.title).bold().foregroundStyle(entry.incoming ? Color.blue : Color.primary)
+                    Text(entry.detail).foregroundStyle(entry.isError ? Color.red : Color.secondary)
+                        .textSelection(.enabled)
+                }
+                .font(.caption.monospaced())
+                .id(entry.id)
+            }
+            .listStyle(.plain)
+            .onChange(of: oscLog.entries.count) { _ in
+                if let last = oscLog.entries.last { proxy.scrollTo(last.id, anchor: .bottom) }
+            }
+        }
+    }
+}
+
 struct OSCLogView: View {
     @EnvironmentObject var state: AppState
     /// Remembered between launches.
-    @AppStorage("Mac2Hog.oscOutputCollapsed") private var collapsed = false
+    /// Collapsed by default; remembered between launches.
+    @AppStorage("Mac2Hog.oscOutputPanelCollapsed") private var collapsed = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,7 +116,7 @@ struct OSCLogView: View {
                     Button { collapsed = false } label: { Label("Open OSC output", systemImage: "chevron.up") }
                 } else {
                     Button("Send test") { state.sendTestMessage() }
-                    Button("Clear") { state.log.removeAll() }
+                    Button("Clear") { state.oscLog.clear() }
                     Button { collapsed = true } label: { Label("Collapse Output", systemImage: "chevron.down") }
                 }
             }
@@ -98,23 +124,7 @@ struct OSCLogView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             if !collapsed {
-                ScrollViewReader { proxy in
-                    List(state.log) { entry in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(entry.date, format: .dateTime.hour().minute().second())
-                                .foregroundStyle(.secondary)
-                            Text(entry.title).bold().foregroundStyle(entry.incoming ? Color.blue : Color.primary)
-                            Text(entry.detail).foregroundStyle(entry.isError ? Color.red : Color.secondary)
-                                .textSelection(.enabled)
-                        }
-                        .font(.caption.monospaced())
-                        .id(entry.id)
-                    }
-                    .listStyle(.plain)
-                    .onChange(of: state.log.count) { _ in
-                        if let last = state.log.last { proxy.scrollTo(last.id, anchor: .bottom) }
-                    }
-                }
+                OSCLogList()
                 .frame(minHeight: 60, idealHeight: 110, maxHeight: 170)
             }
         }

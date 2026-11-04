@@ -13,7 +13,10 @@ struct Mac2HogApp: App {
             ContentView()
                 .environmentObject(state)
                 .environmentObject(state.playback)
+                .environmentObject(state.activity)
+                .environmentObject(state.oscLog)
                 .frame(minWidth: 1100, minHeight: 720)
+                .background(WindowFrameKeeper(autosaveName: "Mac2HogMainWindow"))
         }
         .commands { AppCommands(state: state, playback: state.playback) }
 
@@ -21,8 +24,31 @@ struct Mac2HogApp: App {
             SettingsView()
                 .environmentObject(state)
                 .environmentObject(state.playback)
+                .environmentObject(state.activity)
+                .environmentObject(state.oscLog)
         }
     }
+}
+
+/// First launch: open the main window filling the screen (not full-screen). Afterwards AppKit
+/// remembers the size and position the user left it at under `autosaveName`.
+struct WindowFrameKeeper: NSViewRepresentable {
+    let autosaveName: String
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            let name = NSWindow.FrameAutosaveName(autosaveName)
+            if !window.setFrameUsingName(name), let screen = window.screen ?? NSScreen.main {
+                window.setFrame(screen.visibleFrame, display: true)
+            }
+            window.setFrameAutosaveName(name)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
