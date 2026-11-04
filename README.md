@@ -22,9 +22,9 @@ Every cue has a start mode (inspector › Start, shown in the cue list's *Start*
 
 | Start | Fires |
 |---|---|
-| **Timecode** | at its own position in the song |
-| **Follow +5s** | 5 s after the previous cue *started* |
-| **Wait +10s** | 10 s after the previous cue *finished*, i.e. its start + its **Duration** (set the duration to the cue's fade/run time on the Hog) |
+| **Timecode** | at its own position in the song. |
+| **Follow +5s** | 5 s after the previous cue *started*. Follow time can be set |
+| **Wait +10s** | 10 s after the previous cue *finished*, i.e. its start + its **Duration** (set the duration to the cue's fade/run time on the Hog). Wait time can be set. |
 
 Follow / Wait cues stay chained behind the cue before them in the list. In timecode mode their times are
 computed automatically. In manual mode a GO fires the cue plus its whole Follow / Wait chain with the right delays.
