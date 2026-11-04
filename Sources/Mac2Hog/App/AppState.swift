@@ -342,8 +342,43 @@ final class AppState: ObservableObject {
         if analyze { self.analyze() }
     }
 
+    /// Points the current song at a different audio file (e.g. after moving files) without re-analysing.
+    /// In a setlist this updates the song's path in the .mac2hogset.
+    func relinkSongPanel() {
+        guard project.songPath != nil, editingState == nil else { importSongPanel(); return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.mp3, .wav, .aiff, .mpeg4Audio, .audio]
+        panel.message = "Select the audio file for “\(project.name)”"
+        if let old = project.songPath {
+            let dir = URL(fileURLWithPath: old).deletingLastPathComponent()
+            if FileManager.default.fileExists(atPath: dir.path) { panel.directoryURL = dir }
+        }
+        if panel.runModal() == .OK, let url = panel.url { relinkSong(to: url) }
+    }
+
+    func relinkSong(to url: URL) {
+        project.songPath = url.path
+        settings.remember(song: url.path)
+        decodedAudio = nil
+        reloadPlayer()
+        if let analysed = project.analysis?.duration, duration > 0, abs(analysed - duration) > 1 {
+            analysisStatus = String(format: "Linked %@ — its length (%@) differs from the analysis (%@). Re-analyze if this is a different version.",
+                                    url.lastPathComponent, formatTime(duration), formatTime(analysed))
+        } else {
+            analysisStatus = "Linked \(url.lastPathComponent)"
+        }
+    }
+
+    var currentSongMissing: Bool {
+        guard let path = project.songPath else { return false }
+        return !FileManager.default.fileExists(atPath: path)
+    }
+
     func reloadPlayer() {
-        guard let path = project.songPath else { engine.load(player: nil); duration = 0; return }
+        guard let path = project.songPath, FileManager.default.fileExists(atPath: path) else {
+            // Missing files are flagged in the sidebar and Settings › Song (Select File… reconnects them).
+            engine.load(player: nil); duration = 0; refreshTransport(); return
+        }
         let url = URL(fileURLWithPath: path)
         do {
             let player: AVAudioPlayer
@@ -583,7 +618,10 @@ final class AppState: ObservableObject {
                 if let show = set.songs.compactMap(\.project.show).first { currentShow = show }
                 selectInternal(set.songs.first.map { .song($0.id) } ?? .state(.starting))
                 let missing = set.songs.compactMap(\.project.songPath).filter { !FileManager.default.fileExists(atPath: $0) }
-                if !missing.isEmpty { alertMessage = "These songs could not be found:\n" + missing.joined(separator: "\n") }
+                if !missing.isEmpty {
+                    alertMessage = "These songs could not be found:\n" + missing.joined(separator: "\n")
+                        + "\n\nSelect each song in the setlist and use Settings › Song › Select File… to reconnect it."
+                }
                 isDirty = false
                 return
             }
@@ -597,7 +635,7 @@ final class AppState: ObservableObject {
             settings.timecodeRate = p.timecodeRate
             settings.timecodeStartHour = p.timecodeStart.hours
             if let path = p.songPath, !FileManager.default.fileExists(atPath: path) {
-                alertMessage = "The song \(path) could not be found. Use File › Import Song to relink it."
+                alertMessage = "The song \(path) could not be found. Use Settings › Song › Select File… to reconnect it."
             }
             reloadPlayer()
             isDirty = false
@@ -792,7 +830,9 @@ final class AppState: ObservableObject {
         guard let set = setlist, !isAnalyzing else { return }
         // Current song first, then the rest in setlist order.
         let ordered = (currentSongIndex.map { [set.songs[$0]] } ?? []) + set.songs
-        guard let next = ordered.first(where: { $0.project.analysis == nil && $0.project.songPath != nil }),
+        guard let next = ordered.first(where: {
+                  $0.project.analysis == nil && $0.project.songPath.map { FileManager.default.fileExists(atPath: $0) } == true
+              }),
               let path = next.project.songPath else { return }
         let isCurrent = selection == .song(next.id)
         runAnalysis(path: path, target: .song(next.id), cached: isCurrent ? decodedAudio : nil) { [weak self] in

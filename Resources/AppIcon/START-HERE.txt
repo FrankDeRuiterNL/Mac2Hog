@@ -1,0 +1,94 @@
+Mac2Hog — Icon and GitHub Header Kit
+Created 4 November 2026
+
+DESIGN
+Original cyan sculpted hog head, audio waveform, cue marker, and silver computer
+base on a midnight blue tile. The supplied Apple and Flying Pig Systems logos
+were thematic references; their artwork is not included in these deliverables.
+The result is an original visual direction, not a legal clearance or a claim
+of endorsement by Apple or the makers of Hog/WholeHog consoles.
+
+USE IN YOUR SWIFT MAC APP — VERIFIED ASSET CATALOG
+1. Open your Xcode project's Assets.xcassets.
+2. Drag this kit's Assets.xcassets/AppIcon.appiconset into your asset catalog.
+   If you already have AppIcon, replace its contents or remove that placeholder
+   before importing. Alternatively, add the complete supplied Assets.xcassets
+   if your project does not already have an asset catalog.
+3. In your app target's General > App Icons and Launch Screen settings,
+   select AppIcon. The build setting is ASSETCATALOG_COMPILER_APPICON_NAME.
+4. Build the app and inspect the icon in the Dock and Finder.
+No Swift code is required. Xcode compiles and bundles the icon.
+
+The asset catalog was successfully compiled with Apple's actool for macOS,
+with a macOS 13.0 minimum deployment target. Mac2Hog.icns contains all ten PNG size/scale representations in the native
+ICNS container. It was decoded with Apple's iconutil to verify all ten slots. This checks the assets, not a complete
+application build, App Store submission, or appearance on every macOS release.
+
+PNG SIZE SLOTS
+Logical size       1x pixels       2x pixels
+16 x 16 pt         16 x 16         32 x 32
+32 x 32 pt         32 x 32         64 x 64
+128 x 128 pt       128 x 128       256 x 256
+256 x 256 pt       256 x 256       512 x 512
+512 x 512 pt       512 x 512       1024 x 1024
+
+All ten slots are supplied in both AppIcon.appiconset and Mac2Hog.iconset.
+The repeated pixel dimensions are intentional: each belongs to a distinct
+logical-size and scale slot. PNG files have an embedded sRGB color profile.
+The 512pt @2x slot supplies the 1024px Mac App Store artwork in this workflow.
+
+FILES
+Assets.xcassets/              Ready-to-import Xcode asset catalog
+Mac2Hog.iconset/              Ten named PNG files for traditional Mac icons
+Mac2Hog.icns                  Native multi-resolution icon, verified by iconutil
+Mac2Hog-1024.png              Standard 1024 x 1024 transparent icon master
+Masters/                     Original generated icon at its native resolution
+Previews/icon-size-check.png  Real-size inspection at 16,32,64,128,256 pixels
+GitHub/mac2hog-header.png     Full-resolution README header
+GitHub/mac2hog-header-1200.png Smaller PNG header
+GitHub/mac2hog-header.webp    Compressed alternative for web use
+Icon-Composer-Source/        Transparent 1024px foreground artwork for import
+GENERATION-PROMPTS.txt        Exact prompts and generation method
+VALIDATION.json              Dimensions and native ICNS representation checks
+
+MODERN ICON COMPOSER WORKFLOW — MANUAL IMPORT REQUIRED
+Apple's current guidance uses a 1024 x 1024 square design with foreground
+layers and a system-masked background. This kit also includes an unmasked,
+transparent foreground PNG, separate from the traditional rounded tile.
+Create a new icon in Icon Composer (Xcode > Open Developer Tool > Icon Composer).
+Set macOS as the platform. Use a solid midnight navy background (#060E1F)
+or a restrained navy gradient and import 01-Hog-and-Control.png as a foreground
+layer. The source layer retains the original sculpted material treatment.
+Keep additional glass and translucency effects restrained and preview them.
+Let Icon Composer apply the outer mask; do not use the flattened rounded tile
+as a new full-bleed background. Preview Default, Dark, Clear and Tinted modes
+and smaller sizes before saving Mac2Hog.icon. Add that file to the app target
+and select Mac2Hog as the app icon name.
+
+IMPORTANT: No finished or verified .icon document is included. This machine's
+Icon Composer exporter rejected the attempted document, so the supplied
+modern material is an import-ready artwork layer, not a compiled Liquid Glass
+icon. The verified asset catalog above is the ready-to-use implementation.
+Xcode may prefer a selected .icon document over the existing asset catalog;
+choose one workflow deliberately. No ICO, JPEG, PDF, or SVG is required for
+the traditional macOS application icon. The generated artwork is raster;
+no artificial vector conversion is presented as an editable vector master.
+
+GITHUB README
+Copy GitHub/mac2hog-header.png into your repository as docs/mac2hog-header.png.
+Add this at the top of README.md:
+
+<p align="center">
+  <img src="docs/mac2hog-header.png" alt="Mac2Hog — Taking control of the piggy right from you Mac" width="100%" />
+</p>
+
+The tagline intentionally preserves the requested wording, including
+"you Mac". The application icon contains no lettering for small-size clarity.
+
+APPLE REFERENCES — CHECKED 4 NOVEMBER 2026
+App icon design and current layered specifications:
+https://developer.apple.com/design/human-interface-guidelines/app-icons
+Asset catalog configuration:
+https://developer.apple.com/documentation/xcode/configuring-your-app-icon
+Icon Composer workflow:
+https://developer.apple.com/documentation/xcode/creating-your-app-icon-using-icon-composer

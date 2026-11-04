@@ -27,6 +27,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Needed when launched from `swift run` (no bundle): become a regular foreground app.
         NSApp.setActivationPolicy(.regular)
+        // Inside Mac2Hog.app macOS uses the bundled icon; when unbundled, set it ourselves.
+        if Bundle.main.bundleURL.pathExtension != "app",
+           let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png"),
+           let image = NSImage(contentsOf: url) {
+            NSApp.applicationIconImage = image
+        }
         NSApp.activate(ignoringOtherApps: true)
     }
 

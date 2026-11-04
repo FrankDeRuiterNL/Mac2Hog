@@ -1,0 +1,152 @@
+{
+  "asset_catalog_compilation": "Passed: Apple actool, macOS deployment target 13.0",
+  "native_icns": "ICNS container with ten named size/scale PNG representations",
+  "icns_apple_iconutil_decode": "Passed",
+  "decoded_slots": [
+    "icon_128x128.png",
+    "icon_128x128@2x.png",
+    "icon_16x16.png",
+    "icon_16x16@2x.png",
+    "icon_256x256.png",
+    "icon_256x256@2x.png",
+    "icon_32x32.png",
+    "icon_32x32@2x.png",
+    "icon_512x512.png",
+    "icon_512x512@2x.png"
+  ],
+  "png_slots": [
+    {
+      "filename": "icon_128x128.png",
+      "pixels": [
+        128,
+        128
+      ],
+      "mode": "RGBA",
+      "sRGB_profile": true
+    },
+    {
+      "filename": "icon_128x128@2x.png",
+      "pixels": [
+        256,
+        256
+      ],
+      "mode": "RGBA",
+      "sRGB_profile": true
+    },
+    {
+      "filename": "icon_16x16.png",
+      "pixels": [
+        16,
+        16
+      ],
+      "mode": "RGBA",
+      "sRGB_profile": true
+    },
+    {
+      "filename": "icon_16x16@2x.png",
+      "pixels": [
+        32,
+        32
+      ],
+      "mode": "RGBA",
+      "sRGB_profile": true
+    },
+    {
+      "filename": "icon_256x256.png",
+      "pixels": [
+        256,
+        256
+      ],
+      "mode": "RGBA",
+      "sRGB_profile": true
+    },
+    {
+      "filename": "icon_256x256@2x.png",
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA",
+      "sRGB_profile": true
+    },
+    {
+      "filename": "icon_32x32.png",
+      "pixels": [
+        32,
+        32
+      ],
+      "mode": "RGBA",
+      "sRGB_profile": true
+    },
+    {
+      "filename": "icon_32x32@2x.png",
+      "pixels": [
+        64,
+        64
+      ],
+      "mode": "RGBA",
+      "sRGB_profile": true
+    },
+    {
+      "filename": "icon_512x512.png",
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA",
+      "sRGB_profile": true
+    },
+    {
+      "filename": "icon_512x512@2x.png",
+      "pixels": [
+        1024,
+        1024
+      ],
+      "mode": "RGBA",
+      "sRGB_profile": true
+    }
+  ],
+  "icns_chunks": [
+    {
+      "type": "icp4",
+      "bytes": 1205
+    },
+    {
+      "type": "ic11",
+      "bytes": 2775
+    },
+    {
+      "type": "icp5",
+      "bytes": 2775
+    },
+    {
+      "type": "ic12",
+      "bytes": 7434
+    },
+    {
+      "type": "ic07",
+      "bytes": 22561
+    },
+    {
+      "type": "ic13",
+      "bytes": 70942
+    },
+    {
+      "type": "ic08",
+      "bytes": 70942
+    },
+    {
+      "type": "ic14",
+      "bytes": 252416
+    },
+    {
+      "type": "ic09",
+      "bytes": 252416
+    },
+    {
+      "type": "ic10",
+      "bytes": 975418
+    }
+  ],
+  "modern_icon_document": "Not delivered: exporter validation failed; transparent source layer included"
+}

@@ -8,6 +8,10 @@
     <string>Mac2Hog</string>
     <key>CFBundleIdentifier</key>
     <string>nl.frankderuiter.mac2hog</string>
+    <key>CFBundleIconFile</key>
+    <string>Mac2Hog</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
     <key>CFBundleExecutable</key>
     <string>Mac2Hog</string>
     <key>CFBundlePackageType</key>

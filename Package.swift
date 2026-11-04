@@ -12,7 +12,12 @@ let package = Package(
         // Platform-independent engine: audio analysis, timecode, OSC, Hog 4 mapping, show runner.
         .target(name: "Mac2HogCore"),
         // SwiftUI macOS application.
-        .executableTarget(name: "Mac2Hog", dependencies: ["Mac2HogCore"]),
+        .executableTarget(
+            name: "Mac2Hog",
+            dependencies: ["Mac2HogCore"],
+            // Dock icon when running unbundled (`swift run`); the .app uses Resources/AppIcon.
+            resources: [.copy("Resources/AppIcon.png")]
+        ),
         .testTarget(name: "Mac2HogCoreTests", dependencies: ["Mac2HogCore"]),
     ]
 )

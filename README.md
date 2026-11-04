@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/mac2hog-header.png" alt="Mac2Hog — Taking control of the piggy right from you Mac" width="100%" />
+</p>
+
 <img width="1942" height="809" alt="image" src="https://github.com/user-attachments/assets/4a10e0dc-0acb-4295-bbb2-114ee52d5c7e" />
 
 
@@ -69,6 +73,13 @@ swift run -c release Mac2Hog
 ```
 
 You can also open `Package.swift` in Xcode and run the **Mac2Hog** scheme.
+
+The app icon lives in `Resources/AppIcon/`: `build-app.sh` copies `Mac2Hog.icns` into the bundle and, when Xcode's
+`actool` is available, also compiles `Assets.xcassets` (the `AppIcon` set). `Icon-Composer-Source/` holds the
+foreground layer for a future Icon Composer (`.icon`) version; see `Resources/AppIcon/START-HERE.txt`.
+
+**Moved audio files?** Select the song (in a setlist: in the sidebar) and use *Settings › Song › Select File…*. This
+only changes the audio path and keeps the analysis and cues. Use *Re-analyze* yourself if the file is a different version.
 
 Run the engine tests with `swift test` (the core engine also builds and tests on Linux).
 Every push builds the app and runs the tests on GitHub Actions; the built `Mac2Hog.app` is attached to the run as an artifact.

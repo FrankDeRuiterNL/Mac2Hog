@@ -92,9 +92,15 @@ struct SetlistSidebar: View {
                 Text("\(index + 1)").font(.body.monospacedDigit()).foregroundStyle(.secondary).frame(width: 20, alignment: .trailing)
                 if playing { Image(systemName: "speaker.wave.2.fill").foregroundStyle(.green) }
                 Text(song.name).bold().lineLimit(1)
+                if let path = song.project.songPath, !FileManager.default.fileExists(atPath: path) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                        .help("Audio file not found. Select this song, then Settings › Song › Select File…")
+                }
                 Spacer()
                 if let a = song.project.analysis {
                     Text(formatTime(a.duration)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                } else if let path = song.project.songPath, !FileManager.default.fileExists(atPath: path) {
+                    EmptyView()
                 } else {
                     ProgressView().controlSize(.mini).help("Analysing…")
                 }

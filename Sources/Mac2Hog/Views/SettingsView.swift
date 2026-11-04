@@ -178,10 +178,25 @@ struct SongSettings: View {
         Form {
             Section("Current song") {
                 HStack {
-                    Text(state.project.songPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "None").bold()
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(state.project.songPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "None").bold()
+                        if let path = state.project.songPath {
+                            Text(path).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        }
+                        if state.currentSongMissing {
+                            Label("Audio file not found — use Select File… to reconnect it", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption).foregroundStyle(.red)
+                        }
+                    }
                     Spacer()
-                    Button("Import Song…") { state.importSongPanel() }
-                    Button("Re-analyze") { state.analyze() }.disabled(state.project.songPath == nil || state.isAnalyzing)
+                    if state.project.songPath != nil && state.editingState == nil {
+                        Button("Select File…") { state.relinkSongPanel() }
+                            .help("Choose the audio file for this song. Keeps the analysis and cues; does not re-analyze.")
+                    } else {
+                        Button(state.setlist == nil ? "Import Song…" : "Add Songs…") { state.importSongPanel() }
+                    }
+                    Button("Re-analyze") { state.analyze() }
+                        .disabled(state.project.songPath == nil || state.isAnalyzing || state.currentSongMissing)
                 }
                 if state.isAnalyzing { ProgressView(value: state.analysisProgress) { Text(state.analysisStatus).font(.caption) } }
                 else if !state.analysisStatus.isEmpty { Text(state.analysisStatus).font(.caption).foregroundStyle(.secondary) }
