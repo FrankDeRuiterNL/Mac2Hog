@@ -78,7 +78,7 @@ struct ContentView: View {
             }
             Divider()
             OSCLogView()
-                .frame(minHeight: 90, idealHeight: 130, maxHeight: 200)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -114,7 +114,7 @@ struct StateEditorView: View {
             }
             Divider()
             OSCLogView()
-                .frame(minHeight: 90, idealHeight: 130, maxHeight: 200)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

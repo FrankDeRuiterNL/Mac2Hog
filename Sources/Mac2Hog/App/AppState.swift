@@ -100,7 +100,10 @@ final class AppState: ObservableObject {
     @Published var setlist: Setlist?
     @Published private(set) var selection: SetlistSelection?
     @Published private(set) var phase: SetlistPhase = .idle
-    @Published private(set) var clock = Date()
+    /// Fast-changing playback values live in their own object so the 30 Hz updates only redraw the
+    /// views that show them (transport, playhead), not the whole window.
+    let playback = PlaybackClock()
+    var clock: Date { playback.now }
     private var phaseWork: DispatchWorkItem?
     /// Last imported showfile, shared by every song and state of a setlist.
     private var currentShow: HogShow?
@@ -119,8 +122,13 @@ final class AppState: ObservableObject {
     @Published var mode: PlaybackMode = .timecode {
         didSet { engine.setAutoFire(mode == .timecode); if mode == .manual { cueStack.reset() } }
     }
-    @Published private(set) var currentTime: Double = 0
-    @Published private(set) var isPlaying = false
+    var currentTime: Double { playback.currentTime }
+    var isPlaying: Bool { playback.isPlaying }
+    /// Follow the playhead / fired cues in the waveform and the cue list.
+    @Published var followPlayhead = true
+    /// Cues fired recently whose duration hasn't elapsed yet (shown red in the cue list).
+    @Published private(set) var runningCueIDs: Set<UUID> = []
+    private var runningTokens: [UUID: UUID] = [:]
     @Published private(set) var duration: Double = 0
     @Published var cueStack = CueStack(triggers: [])
     @Published var lastFiredID: UUID?
@@ -216,12 +224,29 @@ final class AppState: ObservableObject {
     // MARK: - Logging
 
     private func handle(_ event: ShowEngine.FireEvent) {
-        if let t = event.trigger { lastFiredID = t.id }
+        if let t = event.trigger {
+            if lastFiredID != t.id { lastFiredID = t.id }
+            markRunning(t)
+        }
         let title = event.trigger.map { "\(project.timecode(at: event.songTime))  \($0.name)" } ?? "OSC"
         let detail = event.messages.isEmpty ? "(no commands)" : event.messages.map(\.description).joined(separator: "   ")
         appendLog(OSCLogEntry(songTime: event.songTime, title: title, detail: event.error.map { "\(detail)  ⚠︎ \($0)" } ?? detail,
                               isError: event.error != nil, incoming: false))
         if event.error != nil { networkOK = false; networkStatus = event.error ?? "" } else if !event.messages.isEmpty { networkOK = true }
+    }
+
+    /// A fired cue with a duration counts as running until its duration has elapsed.
+    private func markRunning(_ trigger: ShowTrigger) {
+        let duration = project.triggers.first { $0.id == trigger.id }?.duration ?? trigger.duration
+        guard duration > 0 else { return }
+        let token = UUID()
+        runningTokens[trigger.id] = token
+        runningCueIDs.insert(trigger.id)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+            guard let self, self.runningTokens[trigger.id] == token else { return }
+            self.runningTokens[trigger.id] = nil
+            self.runningCueIDs.remove(trigger.id)
+        }
     }
 
     private func appendLog(_ entry: OSCLogEntry) {
@@ -233,10 +258,10 @@ final class AppState: ObservableObject {
 
     private func refreshTransport() {
         let t = engine.currentTime
-        if abs(t - currentTime) > 0.001 { currentTime = t }
+        if abs(t - playback.currentTime) > 0.001 { playback.currentTime = t }
         let playing = engine.isPlaying
-        if playing != isPlaying { isPlaying = playing }
-        if phase.isRunning { clock = Date() }
+        if playing != playback.isPlaying { playback.isPlaying = playing }
+        if phase.isRunning { playback.now = Date() }
     }
 
     var currentTimecode: Timecode { project.timecode(at: currentTime) }
@@ -276,6 +301,8 @@ final class AppState: ObservableObject {
         phaseWork = nil
         phase = .idle
         engine.stop()
+        runningCueIDs = []
+        runningTokens = [:]
         if settings.sendReleaseOnStop {
             var seen = Set<String>()
             let all = project.triggers + (setlist.map { $0.songs.flatMap(\.project.triggers) + $0.startingState + $0.waitingState + $0.endingState } ?? [])

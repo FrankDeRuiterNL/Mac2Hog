@@ -54,7 +54,7 @@ to the Autosave folder (*File › Show Autosave Folder*). Single-song shows auto
 
 ## Version
 
-Current version: **0.1.5**. Mac2Hog uses [Semantic Versioning](https://semver.org); see [CHANGELOG.md](CHANGELOG.md).
+Current version: **0.2.0**. Mac2Hog uses [Semantic Versioning](https://semver.org); see [CHANGELOG.md](CHANGELOG.md).
 The version is shown in *Settings › About*.
 
 ## Requirements

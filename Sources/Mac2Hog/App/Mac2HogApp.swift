@@ -12,13 +12,15 @@ struct Mac2HogApp: App {
         WindowGroup("Mac2Hog") {
             ContentView()
                 .environmentObject(state)
+                .environmentObject(state.playback)
                 .frame(minWidth: 1100, minHeight: 720)
         }
-        .commands { AppCommands(state: state) }
+        .commands { AppCommands(state: state, playback: state.playback) }
 
         Settings {
             SettingsView()
                 .environmentObject(state)
+                .environmentObject(state.playback)
         }
     }
 }

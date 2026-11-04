@@ -76,35 +76,46 @@ struct GenerateTriggersSheet: View {
 
 struct OSCLogView: View {
     @EnvironmentObject var state: AppState
+    /// Remembered between launches.
+    @AppStorage("Mac2Hog.oscOutputCollapsed") private var collapsed = false
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 Text("OSC output").font(.caption.bold())
                 Text(state.networkStatus).font(.caption).foregroundStyle(state.networkOK ? Color.secondary : Color.red)
+                    .lineLimit(1)
                 Spacer()
-                Button("Send test") { state.sendTestMessage() }
-                Button("Clear") { state.log.removeAll() }
+                if collapsed {
+                    Button { collapsed = false } label: { Label("Open OSC output", systemImage: "chevron.up") }
+                } else {
+                    Button("Send test") { state.sendTestMessage() }
+                    Button("Clear") { state.log.removeAll() }
+                    Button { collapsed = true } label: { Label("Collapse Output", systemImage: "chevron.down") }
+                }
             }
             .controlSize(.small)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            ScrollViewReader { proxy in
-                List(state.log) { entry in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(entry.date, format: .dateTime.hour().minute().second())
-                            .foregroundStyle(.secondary)
-                        Text(entry.title).bold().foregroundStyle(entry.incoming ? Color.blue : Color.primary)
-                        Text(entry.detail).foregroundStyle(entry.isError ? Color.red : Color.secondary)
-                            .textSelection(.enabled)
+            if !collapsed {
+                ScrollViewReader { proxy in
+                    List(state.log) { entry in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(entry.date, format: .dateTime.hour().minute().second())
+                                .foregroundStyle(.secondary)
+                            Text(entry.title).bold().foregroundStyle(entry.incoming ? Color.blue : Color.primary)
+                            Text(entry.detail).foregroundStyle(entry.isError ? Color.red : Color.secondary)
+                                .textSelection(.enabled)
+                        }
+                        .font(.caption.monospaced())
+                        .id(entry.id)
                     }
-                    .font(.caption.monospaced())
-                    .id(entry.id)
+                    .listStyle(.plain)
+                    .onChange(of: state.log.count) { _ in
+                        if let last = state.log.last { proxy.scrollTo(last.id, anchor: .bottom) }
+                    }
                 }
-                .listStyle(.plain)
-                .onChange(of: state.log.count) { _ in
-                    if let last = state.log.last { proxy.scrollTo(last.id, anchor: .bottom) }
-                }
+                .frame(minHeight: 60, idealHeight: 110, maxHeight: 170)
             }
         }
     }

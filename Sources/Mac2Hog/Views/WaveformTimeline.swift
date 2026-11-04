@@ -8,7 +8,6 @@ import Mac2HogCore
 struct WaveformTimeline: View {
     @EnvironmentObject var state: AppState
     @State private var viewStart: Double = 0
-    @State private var followPlayhead = true
     @State private var dragMode: DragMode?
     @State private var showSnares = true
     @State private var showBeats = true
@@ -21,7 +20,7 @@ struct WaveformTimeline: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            OverviewStrip(viewStart: $viewStart, followPlayhead: $followPlayhead)
+            OverviewStrip(viewStart: $viewStart)
                 .frame(height: 34)
             GeometryReader { geo in
                 let width = geo.size.width
@@ -32,12 +31,9 @@ struct WaveformTimeline: View {
                     .simultaneousGesture(SpatialTapGesture(count: 2).onEnded { v in
                         state.addTrigger(at: time(atX: v.location.x))
                     })
-                    .onChange(of: state.currentTime) { t in
-                        guard followPlayhead, state.isPlaying else { return }
-                        if t < viewStart || t > viewStart + visible * 0.85 {
-                            viewStart = max(0, t - visible * 0.15)
-                        }
-                    }
+                    // The playhead is a separate light layer: only it redraws while the song plays.
+                    .overlay(PlayheadLayer(viewStart: $viewStart, zoom: state.zoom, visible: visible,
+                                           follow: state.followPlayhead).clipped())
                     .contextMenu {
                         Button("Add Trigger at Playhead") { state.addTrigger(at: state.currentTime) }
                     }
@@ -52,7 +48,8 @@ struct WaveformTimeline: View {
             Slider(value: Binding(get: { log2(state.zoom) }, set: { state.zoom = pow(2, $0) }), in: 2...9)
                 .frame(width: 160)
             Image(systemName: "plus.magnifyingglass")
-            Toggle("Follow", isOn: $followPlayhead)
+            Toggle("Follow", isOn: $state.followPlayhead)
+                .help("Keep the waveform and the cue list on the playhead / last fired cue")
             Toggle("Snap to beat", isOn: $state.snapToBeat)
             Toggle("Beats", isOn: $showBeats)
             Toggle("Snares", isOn: $showSnares)
@@ -105,7 +102,7 @@ struct WaveformTimeline: View {
                 case .some(.pan(let start)):
                     let maxStart = max(0, state.duration - Double(width) / state.zoom)
                     viewStart = min(maxStart, max(0, start - Double(v.translation.width) / state.zoom))
-                    if abs(v.translation.width) > 3 { followPlayhead = false }
+                    if abs(v.translation.width) > 3 { state.followPlayhead = false }
                 case .some(.trigger(let id)):
                     guard abs(v.translation.width) > 2, let binding = state.binding(for: id) else { break }
                     var t = time(atX: v.location.x)
@@ -215,11 +212,46 @@ struct WaveformTimeline: View {
             ctx.fill(Path(roundedRect: flag, cornerRadius: 3), with: .color(color))
             ctx.draw(resolved, at: CGPoint(x: tx + 4, y: flag.midY), anchor: .leading)
         }
+    }
+}
 
-        // Playhead
-        let px = x(of: state.currentTime)
-        ctx.stroke(Path { p in p.move(to: CGPoint(x: px, y: 0)); p.addLine(to: CGPoint(x: px, y: size.height)) },
-                   with: .color(.red), lineWidth: 2)
+/// Red playhead line over the detail view; also scrolls the view while following.
+private struct PlayheadLayer: View {
+    @EnvironmentObject var playback: PlaybackClock
+    @Binding var viewStart: Double
+    let zoom: Double
+    let visible: Double
+    let follow: Bool
+
+    var body: some View {
+        GeometryReader { _ in
+            Rectangle()
+                .fill(Color.red)
+                .frame(width: 2)
+                .offset(x: CGFloat((playback.currentTime - viewStart) * zoom) - 1)
+        }
+        .allowsHitTesting(false)
+        .onChange(of: playback.currentTime) { t in
+            guard follow, playback.isPlaying else { return }
+            if t < viewStart || t > viewStart + visible * 0.85 {
+                viewStart = max(0, t - visible * 0.15)
+            }
+        }
+    }
+}
+
+private struct OverviewPlayhead: View {
+    @EnvironmentObject var playback: PlaybackClock
+    let duration: Double
+
+    var body: some View {
+        GeometryReader { geo in
+            Rectangle()
+                .fill(Color.red)
+                .frame(width: 2)
+                .offset(x: CGFloat(playback.currentTime / max(duration, 0.001)) * geo.size.width - 1)
+        }
+        .allowsHitTesting(false)
     }
 }
 
@@ -240,7 +272,6 @@ func sectionColor(_ kind: SectionKind) -> Color {
 struct OverviewStrip: View {
     @EnvironmentObject var state: AppState
     @Binding var viewStart: Double
-    @Binding var followPlayhead: Bool
 
     var body: some View {
         GeometryReader { geo in
@@ -268,7 +299,6 @@ struct OverviewStrip: View {
                 let visible = Double(geo.size.width) / state.zoom
                 ctx.stroke(Path(CGRect(x: x(viewStart), y: 1, width: max(4, x(viewStart + visible) - x(viewStart)), height: size.height - 2)),
                            with: .color(.yellow), lineWidth: 1.5)
-                ctx.fill(Path(CGRect(x: x(state.currentTime) - 1, y: 0, width: 2, height: size.height)), with: .color(.red))
             }
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { v in
@@ -276,8 +306,9 @@ struct OverviewStrip: View {
                 let visible = Double(geo.size.width) / state.zoom
                 let t = Double(v.location.x / geo.size.width) * d
                 viewStart = max(0, min(max(0, d - visible), t - visible / 2))
-                followPlayhead = false
+                state.followPlayhead = false
             })
+            .overlay(OverviewPlayhead(duration: state.duration).clipped())
         }
         .background(Color.primary.opacity(0.05))
     }

@@ -4,6 +4,7 @@ import Mac2HogCore
 
 struct AppCommands: Commands {
     @ObservedObject var state: AppState
+    @ObservedObject var playback: PlaybackClock
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
@@ -24,7 +25,7 @@ struct AppCommands: Commands {
             Button("Export Song + LTC (stereo WAV)…") { state.exportLTC(includeSong: true) }
         }
         CommandMenu("Show") {
-            Button(state.isPlaying ? "Pause" : "Play") { state.togglePlay() }
+            Button(playback.isPlaying ? "Pause" : "Play") { state.togglePlay() }
                 .keyboardShortcut(.return, modifiers: [.command])
             Button("Stop") { state.stop() }.keyboardShortcut(".", modifiers: [.command])
             if state.setlist != nil {

@@ -5,6 +5,8 @@ import Mac2HogCore
 
 struct TransportBar: View {
     @EnvironmentObject var state: AppState
+    /// Observed so the clock, play button and countdown update while playing.
+    @EnvironmentObject var playback: PlaybackClock
     @Binding var showGenerator: Bool
     @State private var bpmText = ""
 
@@ -151,7 +153,9 @@ struct TransportBar: View {
     }
 
     private var nextTrigger: ShowTrigger? {
-        state.project.sortedTriggers.first { $0.enabled && $0.time > state.currentTime }
+        // Runs ~30× per second while playing: a single pass, no sorting.
+        let now = state.currentTime
+        return state.project.triggers.lazy.filter { $0.enabled && $0.time > now }.min { $0.time < $1.time }
     }
 
     private var barBeat: String {

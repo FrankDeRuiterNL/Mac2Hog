@@ -3,6 +3,13 @@
 Mac2Hog follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The version lives in `VERSION`,
 `Sources/Mac2HogCore/Version.swift` and `Resources/Info.plist` (kept in sync by a unit test) and is bumped on every commit.
 
+## 0.2.0
+- Smoother playback: the playhead clock is a separate observable object, so the 30 Hz position updates only
+  redraw the transport bar and a light playhead layer instead of the whole window (cue list, inspector, waveform).
+- Cue list follows along when *Follow* is on (scrolls to the last fired cue, or the next cue in manual mode).
+- Cue list row colours: purple = last fired cue, red = cue still running (within its Duration).
+- OSC output panel can be collapsed (Collapse Output / Open OSC output); remembered between launches.
+
 ## 0.1.5
 - Cue inspector: cuelist and cue numbers sit right next to their pickers (no longer at the far right) and have
   up/down steppers. With a showfile loaded the steppers move to the next/previous existing cuelist or cue;
