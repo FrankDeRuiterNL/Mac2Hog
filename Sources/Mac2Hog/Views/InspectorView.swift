@@ -13,7 +13,7 @@ struct InspectorView: View {
         } else {
             VStack(spacing: 10) {
                 Image(systemName: "slider.horizontal.3").font(.largeTitle).foregroundStyle(.secondary)
-                Text("Select a cue to attach Hog 4 commands").foregroundStyle(.secondary)
+                Text("Select a cue to attach Hog commands").foregroundStyle(.secondary)
                 Text("Tip: double-click the waveform to add a cue, or use Generate Cues to create cues from the song parts, breaks and snare hits.")
                     .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 280)
             }
@@ -92,7 +92,7 @@ struct TriggerEditor: View {
                 }
             } header: {
                 HStack {
-                    Text("Hog 4 commands")
+                    Text("Hog commands")
                     Spacer()
                     Menu {
                         if !state.settings.predefinedTriggers.isEmpty {

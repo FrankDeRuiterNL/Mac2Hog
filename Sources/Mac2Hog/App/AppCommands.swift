@@ -12,11 +12,12 @@ struct AppCommands: Commands {
             Button("Open Show or Setlist…") { state.openProjectPanel() }.keyboardShortcut("o")
             Divider()
             Button(state.setlist == nil ? "Import Song…" : "Add Songs to Setlist…") { state.importSongPanel() }.keyboardShortcut("i")
-            Button("Import Hog 4 Showfile…") { state.importShowfilePanel() }.keyboardShortcut("i", modifiers: [.command, .shift])
+            Button("Import Hog Showfile…") { state.importShowfilePanel() }.keyboardShortcut("i", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .saveItem) {
             Button("Save Show") { state.saveProject() }.keyboardShortcut("s")
             Button("Save Show As…") { state.saveProjectAs() }.keyboardShortcut("s", modifiers: [.command, .shift])
+            Button("Show Autosave Folder") { state.showAutosaveFolder() }
             Divider()
             Button("Export Cue Sheet (CSV)…") { state.exportCueSheet() }
             Button("Export LTC Timecode (WAV)…") { state.exportLTC(includeSong: false) }

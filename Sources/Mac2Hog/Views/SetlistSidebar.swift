@@ -16,6 +16,13 @@ struct SetlistSidebar: View {
                         .textFieldStyle(.plain)
                     Text("\(set.songs.count) songs · \(formatTime(set.totalDuration)) total")
                         .font(.caption).foregroundStyle(.secondary)
+                    if let saved = state.lastAutosave {
+                        Label {
+                            Text("Auto-saved \(saved, format: .dateTime.hour().minute().second())" +
+                                 (state.projectURL == nil ? " (Autosave folder — use Save As to choose a file)" : ""))
+                        } icon: { Image(systemName: "checkmark.icloud") }
+                        .font(.caption2).foregroundStyle(.secondary)
+                    }
                 }
                 .padding(10)
 

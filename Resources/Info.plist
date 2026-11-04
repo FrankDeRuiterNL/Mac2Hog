@@ -23,7 +23,7 @@
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>Mac2Hog sends OSC commands to your Hog 4 console on the local network.</string>
+    <string>Mac2Hog sends OSC commands to your Hog console on the local network.</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.music</string>
 </dict>

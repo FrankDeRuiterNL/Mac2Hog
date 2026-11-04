@@ -44,9 +44,9 @@ struct NetworkSettings: View {
                     Button("Send test message") { state.settings.consoleHost = host.trimmingCharacters(in: .whitespaces); state.sendTestMessage() }
                 }
             } header: {
-                Text("Hog 4 console")
+                Text("Hog console")
             } footer: {
-                Text("On the Hog: Setup → Control Panel → Network → enable OSC Input and use the same port. The Mac and the console (or Hog 4 PC) must be on the same network. UDP is connectionless, so a test message can only be confirmed on the console (or with feedback below).")
+                Text("On the Hog: Setup → Control Panel → Network → enable OSC Input and use the same port. The Mac and the console (or Hog PC) must be on the same network. UDP is connectionless, so a test message can only be confirmed on the console (or with feedback below).")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
@@ -114,7 +114,7 @@ struct OSCSettings: View {
                 }
                 Toggle("Release used cuelists/scenes when the show is stopped", isOn: $state.settings.sendReleaseOnStop)
             }
-            Section("Hog 4 OSC reference") {
+            Section("Hog OSC reference") {
                 VStack(alignment: .leading, spacing: 3) {
                     ref("Go cuelist", "/hog/playback/go/0  <list>")
                     ref("Goto cue", "/hog/playback/go/0  \"<list>.<cue>\"  (see Goto cue format)")
@@ -163,7 +163,7 @@ struct TimecodeSettings: View {
             } header: {
                 Text("Linear timecode output")
             } footer: {
-                Text("Mac2Hog fires the cues itself over OSC from its internal timecode clock. The LTC options are for when you also want the Hog 4 (via its LTC input) to chase the same timecode, for example to run timecode-triggered cuelists on the console.")
+                Text("Mac2Hog fires the cues itself over OSC from its internal timecode clock. The LTC options are for when you also want the Hog (via its LTC input) to chase the same timecode, for example to run timecode-triggered cuelists on the console.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -380,7 +380,7 @@ struct ShowfileSettings: View {
             } header: {
                 Text("Current showfile")
             } footer: {
-                Text("Supported: Hog 4 XML exports (in Hog 4 OS open the Cuelist, Scene or Macro directory, select the items and choose Export), CSV lists (type,number,name[,cue,cue name]) and saved Mac2Hog libraries. Native .shw files are binary databases that can only be opened by Hog OS — export them to XML first.")
+                Text("Supported: Hog XML exports (in Hog OS open the Cuelist, Scene or Macro directory, select the items and choose Export), CSV lists (type,number,name[,cue,cue name]) and saved Mac2Hog libraries. Native .shw files are binary databases that can only be opened by Hog OS — export them to XML first.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Recent showfiles") {

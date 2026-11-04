@@ -9,6 +9,8 @@ import FoundationXML
 /// * **Hog 4 XML export** (`.xml`) – created on the console from the Cuelist / Scene / Macro
 ///   directory (Export) or Show export. The parser is schema tolerant: any element whose name
 ///   contains `cuelist`, `scene` or `macro` becomes an object, and its `cue` children become cues.
+///   Numbers / names are read from attributes, simple child elements, or a child `<DirectoryItem>`
+///   (the Hog 4 OS v5 `xml_show` schema).
 /// * **CSV** (`.csv`, `.txt`) – `type,number,name[,cue number,cue name]`.
 /// * **Mac2Hog library** (`.json`) – a previously saved `HogShow`.
 /// * **Native show files** (`.shw`, `.hog4`) – these are a proprietary binary database; we
@@ -24,8 +26,8 @@ public enum ShowfileImporter {
             case .unreadable:
                 return "The file could not be read."
             case .nativeShowfile:
-                return "This is a native Hog 4 binary show database, which can't be read outside Hog OS. " +
-                    "On the console (or Hog 4 PC) open the Cuelist / Scene / Macro directory, select the items " +
+                return "This is a native Hog binary show database, which can't be read outside Hog OS. " +
+                    "On the console (or Hog PC) open the Cuelist / Scene / Macro directory, select the items " +
                     "and choose Export to save them as XML, then import that XML file here."
             case .noObjects:
                 return "No cuelists, scenes or macros were found in this file."
@@ -164,13 +166,17 @@ private final class HogXMLDelegate: NSObject, XMLParserDelegate {
     var objects: [HogObject] = []
     private var stack: [Frame] = []
 
-    static let numberKeys = ["number", "num", "index", "no", "id", "cuelistnumber", "scenenumber", "macronumber", "cuenumber"]
+    static let numberKeys = ["number", "num", "index", "no", "id", "cuelistnumber", "scenenumber", "macronumber"]
+    // A cue's own number. (`cuelistNumber` on a Hog 4 <Cue> is its parent list, not the cue.)
+    static let cueNumberKeys = ["number", "num", "index", "no", "id", "cuenumber"]
     static let nameKeys = ["name", "title", "label", "cuelistname", "scenename", "macroname", "cuename"]
 
     private static func classify(_ element: String) -> (HogObjectKind?, Bool) {
         let e = element.lowercased()
-        // Containers such as <Cuelists>, <SceneList>, <Cues> are not objects themselves.
-        if (e.hasSuffix("s") && !e.hasSuffix("ss")) || e.hasSuffix("directory") || e.hasSuffix("folder") {
+        // Containers such as <Cuelists>, <Cues>, <SceneDirectory> and settings blocks such as
+        // <CuelistOptions> / <SceneOptions> are not objects themselves.
+        if (e.hasSuffix("s") && !e.hasSuffix("ss")) || e.hasSuffix("directory") || e.hasSuffix("folder")
+            || e.contains("option") || e.contains("pref") || e.contains("descriptor") {
             return (nil, false)
         }
         if e.contains("cuelist") || e == "list" { return (.cuelist, false) }
@@ -188,6 +194,15 @@ private final class HogXMLDelegate: NSObject, XMLParserDelegate {
 
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
                 qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]) {
+        // Hog 4 XML exports keep an object's number and name in a child element:
+        //   <Cuelist …><DirectoryItem number="1" name="List 1"/> … <Cue …><DirectoryItem number="2" name="Cue 2"/>
+        if elementName.lowercased().hasSuffix("directoryitem"), let parent = stack.indices.last,
+           stack[parent].kind != nil || stack[parent].isCue {
+            for (key, value) in attributeDict {
+                let k = key.lowercased()
+                if (k == "number" || k == "name"), stack[parent].fields[k] == nil { stack[parent].fields[k] = value }
+            }
+        }
         let (kind, isCue) = Self.classify(elementName)
         stack.append(Frame(element: elementName, kind: kind, isCue: isCue, attributes: attributeDict))
     }
@@ -200,10 +215,11 @@ private final class HogXMLDelegate: NSObject, XMLParserDelegate {
     func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
         guard let frame = stack.popLast() else { return }
         let text = frame.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let info = frame.attributes.merging(frame.fields) { a, _ in a }
+        // Fields from child elements (e.g. <DirectoryItem number=…>) take precedence over the element's own attributes.
+        let info = frame.attributes.merging(frame.fields) { _, field in field }
 
         if frame.isCue {
-            if let number = Self.lookup(Self.numberKeys, in: info), let idx = ownerIndex() {
+            if let number = Self.lookup(Self.cueNumberKeys, in: info), let idx = ownerIndex() {
                 stack[idx].cues.append(HogCue(number: ShowfileImporter.normalizeNumber(number),
                                               name: Self.lookup(Self.nameKeys, in: info) ?? ""))
             }

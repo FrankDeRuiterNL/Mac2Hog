@@ -87,7 +87,13 @@ final class AppState: ObservableObject {
     }
     private var isUpdatingProject = false
     @Published var projectURL: URL?
-    @Published var isDirty = false
+    @Published var isDirty = false {
+        didSet { if isDirty { scheduleAutosave() } }
+    }
+    /// When the last auto-save happened (shown in the setlist sidebar).
+    @Published private(set) var lastAutosave: Date?
+    private var autosaveWork: DispatchWorkItem?
+    private var autosaveName = UUID().uuidString
 
     // MARK: Setlist
     /// nil = single-song show. Otherwise `project` is the song or state currently being edited.
@@ -434,7 +440,7 @@ final class AppState: ObservableObject {
         for ext in ["shw", "hog4", "tsv"] { if let t = UTType(filenameExtension: ext) { types.append(t) } }
         panel.allowedContentTypes = types
         panel.allowsOtherFileTypes = true
-        panel.message = "Choose a Hog 4 show export (.xml), a CSV list, or a show file"
+        panel.message = "Choose a Hog show export (.xml), a CSV list, or a show file"
         if panel.runModal() == .OK, let url = panel.url { loadShowfile(url) }
     }
 
@@ -552,6 +558,7 @@ final class AppState: ObservableObject {
         stop()
         selection = nil
         projectURL = nil
+        autosaveName = UUID().uuidString
         setlist = Setlist()
         selectInternal(.state(.starting))
         isDirty = false
@@ -625,6 +632,62 @@ final class AppState: ObservableObject {
         alert.addButton(withTitle: "Discard")
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    // MARK: - Auto-save
+
+    /// Folder where setlists that were never saved by the user are auto-saved.
+    static var autosaveFolder: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory())
+        return base.appendingPathComponent("Mac2Hog/Autosave", isDirectory: true)
+    }
+
+    /// Setlists auto-save after every change (debounced): to their own `.mac2hogset` file once saved,
+    /// otherwise to the Autosave folder. Single-song shows auto-save once they have a file.
+    private func scheduleAutosave() {
+        guard setlist != nil || projectURL != nil else { return }
+        autosaveWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.autosave() }
+        autosaveWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+    }
+
+    private func autosave() {
+        let data: Data
+        let url: URL
+        do {
+            if let set = setlist {
+                data = try set.encoded()
+                if let u = projectURL, u.pathExtension.lowercased() == Setlist.fileExtension {
+                    url = u
+                } else {
+                    try FileManager.default.createDirectory(at: Self.autosaveFolder, withIntermediateDirectories: true)
+                    let safe = set.name.components(separatedBy: CharacterSet(charactersIn: "/:\\")).joined(separator: "-")
+                    url = Self.autosaveFolder.appendingPathComponent("\(safe) \(autosaveName.prefix(8)).\(Setlist.fileExtension)")
+                }
+            } else if let u = projectURL, u.pathExtension.lowercased() == ShowProject.fileExtension {
+                data = try project.encoded()
+                url = u
+            } else { return }
+        } catch {
+            alertMessage = "Auto-save failed: \(error.localizedDescription)"
+            return
+        }
+        let savedToDocument = url == projectURL
+        DispatchQueue.global(qos: .utility).async {
+            let ok = (try? data.write(to: url, options: .atomic)) != nil
+            DispatchQueue.main.async { [weak self] in
+                guard let self, ok else { return }
+                self.lastAutosave = Date()
+                if savedToDocument { self.isDirty = false }
+            }
+        }
+    }
+
+    func showAutosaveFolder() {
+        try? FileManager.default.createDirectory(at: Self.autosaveFolder, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(Self.autosaveFolder)
     }
 
     // MARK: - Setlist editing

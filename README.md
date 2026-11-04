@@ -45,6 +45,9 @@ exactly like a single-song show (its own analysis, timecode and cues). In the se
   State cues use seconds from the start of the state plus Follow / Wait;
 - choose whether the next song starts automatically after the pause, or waits for Play.
 
+Setlists **auto-save** after every change: to their `.mac2hogset` file once you have saved it, and before that
+to the Autosave folder (*File › Show Autosave Folder*). Single-song shows auto-save once they have been saved.
+
 **START** runs the setlist from the top (or from the selected song). STOP / Esc stops everything. Setlists are saved as
 `.mac2hogset` files with all songs embedded.
 
@@ -127,9 +130,9 @@ list.cue in the address, float, two arguments) so you can pick the one your Hog 
 
 A native Hog 4 `.shw` show is a proprietary binary database that only Hog OS can read. Mac2Hog imports:
 
-- **Hog 4 XML exports**: in Hog 4 OS open the Cuelist, Scene or Macro directory, select the items and choose
-  *Export* (or export the show to XML). The parser accepts any element named like `Cuelist`/`Scene`/`Macro`
-  with a number/index attribute or child, plus their `Cue` children.
+- **Hog XML exports**: in Hog OS open the Cuelist, Scene or Macro directory, select the items and choose
+  *Export* (or export the show to XML). Hog OS v5 exports (`xml_show` schema) keep each object's number and name in a
+  child `<DirectoryItem number=… name=…>`. The parser also accepts number/name attributes or child elements.
 - **CSV**: `type,number,name[,cue number,cue name]`, e.g. `cuelist,3,Chorus wash` or `scene,1,Blackout`.
 - Objects can also be **added by hand** in the *Show Objects* tab when you know the numbers.
 

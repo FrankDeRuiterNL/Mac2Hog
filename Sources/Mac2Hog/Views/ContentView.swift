@@ -136,7 +136,7 @@ struct EmptyStateView: View {
             Image(systemName: "waveform.and.magnifyingglass")
                 .font(.system(size: 64))
                 .foregroundStyle(.secondary)
-            Text("Build a Hog 4 light show from a song")
+            Text("Build a Hog light show from a song")
                 .font(.title2.bold())
             Text("Import a .wav or .mp3. Mac2Hog finds the tempo, beat grid, snare hits, breaks and song sections, generates timecode, and lets you attach Hog cuelists, scenes and macros that fire over OSC.")
                 .multilineTextAlignment(.center)
