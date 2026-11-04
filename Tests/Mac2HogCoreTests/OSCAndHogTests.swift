@@ -28,10 +28,17 @@ final class OSCAndHogTests: XCTestCase {
         XCTAssertEqual(mapper.messages(for: HogCommand(action: .resume, objectKind: .cuelist, objectNumber: "4")),
                        [OSCMessage("/hog/playback/resume/0", [.float(4)])])
 
+        let gotoCmd = HogCommand(action: .gotoCue, objectNumber: "1", cueNumber: "10")
+        XCTAssertEqual(mapper.messages(for: gotoCmd), [OSCMessage("/hog/playback/go/0", [.string("1.10")])])
         var cfg = HogOSCConfiguration()
-        cfg.gotoFormat = .string
-        let goto = HogOSCMapper(configuration: cfg).messages(for: HogCommand(action: .gotoCue, objectNumber: "1", cueNumber: "10"))
-        XCTAssertEqual(goto, [OSCMessage("/hog/playback/go/0", [.string("1.10")])])
+        cfg.gotoStyle = .inAddress
+        XCTAssertEqual(HogOSCMapper(configuration: cfg).messages(for: gotoCmd), [OSCMessage("/hog/playback/go/0/1.10")])
+        cfg.gotoStyle = .twoArguments
+        XCTAssertEqual(HogOSCMapper(configuration: cfg).messages(for: gotoCmd), [OSCMessage("/hog/playback/go/0", [.float(1), .float(10)])])
+        cfg.gotoStyle = .floatArgument
+        XCTAssertEqual(HogOSCMapper(configuration: cfg).messages(for: gotoCmd), [OSCMessage("/hog/playback/go/0", [.float(1.1)])])
+        let old = try! JSONDecoder().decode(HogOSCConfiguration.self, from: Data(#"{"addressPrefix":"/hog","numberFormat":"float","gotoFormat":"float","sendKeyRelease":true}"#.utf8))
+        XCTAssertEqual(old.gotoStyle, .stringArgument)
 
         XCTAssertEqual(mapper.messages(for: HogCommand(action: .masterGo, master: 5)),
                        [OSCMessage("/hog/hardware/go/5", [.int(1)]), OSCMessage("/hog/hardware/go/5", [.int(0)])])

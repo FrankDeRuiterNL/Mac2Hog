@@ -66,6 +66,8 @@ struct NetworkSettings: View {
 
 struct OSCSettings: View {
     @EnvironmentObject var state: AppState
+    @State private var testList = "1"
+    @State private var testCue = "2"
 
     var body: some View {
         Form {
@@ -74,10 +76,35 @@ struct OSCSettings: View {
                 Picker("Number arguments", selection: $state.settings.osc.numberFormat) {
                     ForEach(OSCNumberFormat.allCases) { Text($0.displayName).tag($0) }
                 }
-                Picker("Goto “list.cue” argument", selection: $state.settings.osc.gotoFormat) {
-                    ForEach(OSCNumberFormat.allCases) { Text($0.displayName).tag($0) }
+                Picker("Goto cue format", selection: $state.settings.osc.gotoStyle) {
+                    ForEach(GotoStyle.allCases) { Text($0.displayName).tag($0) }
                 }
                 Toggle("Send key release (0) after key press (1)", isOn: $state.settings.osc.sendKeyRelease)
+            }
+            Section {
+                HStack {
+                    Text("Cuelist")
+                    TextField("", text: $testList).frame(width: 60)
+                    Text("Cue")
+                    TextField("", text: $testCue).frame(width: 60)
+                }
+                ForEach(GotoStyle.allCases) { style in
+                    let msg = state.mapper.gotoMessage(list: testList, cue: testCue, style: style)
+                    HStack {
+                        Image(systemName: style == state.settings.osc.gotoStyle ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(style == state.settings.osc.gotoStyle ? Color.green : Color.secondary)
+                        Text(msg.description).font(.caption.monospaced()).textSelection(.enabled)
+                        Spacer()
+                        Button("Send") { state.engine.send(raw: msg) }
+                        Button("Use") { state.settings.osc.gotoStyle = style }
+                            .disabled(style == state.settings.osc.gotoStyle)
+                    }
+                }
+            } header: {
+                Text("Goto cue test")
+            } footer: {
+                Text("Send each variant and watch the cuelist on the Hog; click Use on the one that jumps to the right cue. Tip: enable feedback (Settings › Network) and press a cue on the console to see in the OSC log exactly how the Hog itself formats it.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Timing") {
                 HStack {
@@ -90,7 +117,7 @@ struct OSCSettings: View {
             Section("Hog 4 OSC reference") {
                 VStack(alignment: .leading, spacing: 3) {
                     ref("Go cuelist", "/hog/playback/go/0  <list>")
-                    ref("Goto cue", "/hog/playback/go/0  <list>.<cue>")
+                    ref("Goto cue", "/hog/playback/go/0  \"<list>.<cue>\"  (see Goto cue format)")
                     ref("Halt / resume / release", "/hog/playback/halt|resume|release/0  <list>")
                     ref("Scene go / halt / release", "/hog/playback/go|halt|release/1  <scene>")
                     ref("Macro go", "/hog/playback/go/2  <macro>")

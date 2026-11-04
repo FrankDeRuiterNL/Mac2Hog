@@ -115,8 +115,12 @@ From the Hog 4 OS manual, *OSC Mappings*:
 | Master fader | `/hog/hardware/fader/<master> 0–255` |
 | Main go / halt / back | `/hog/hardware/maingo|mainhalt|mainback 1` then `0` |
 
-Numbers are sent as OSC floats by default. *Settings › OSC* lets you switch to int or string. Use **string** for
-goto commands if your cue numbers have two decimals (cue `1.10` vs `1.1`). Any other address can be sent with a
+Numbers are sent as OSC floats by default (*Settings › OSC* can switch to int or string).
+
+**Goto cue:** the manual only documents the payload as `cuelist #.cue #`. A single float such as `1.2` is ambiguous,
+because Hog cuelists can have decimal numbers themselves (list 1.2), and it also can't tell cue `1.10` from `1.1`. The default is
+therefore a **string** argument (`"1.2"`). *Settings › OSC › Goto cue test* sends each variant (string argument,
+list.cue in the address, float, two arguments) so you can pick the one your Hog OS version accepts. Any other address can be sent with a
 *Custom OSC* command.
 
 ## Showfile import
