@@ -10,18 +10,36 @@ struct TransportBar: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            // Transport
-            HStack(spacing: 6) {
-                Button { state.stop() } label: { Image(systemName: "stop.fill") }.help("Stop (Esc)")
-                Button { state.skip(-5) } label: { Image(systemName: "gobackward.5") }
-                Button { state.togglePlay() } label: {
-                    Image(systemName: state.isPlaying ? "pause.fill" : "play.fill").frame(width: 22)
+            // Transport: large, colour-coded Stop / Play (and GO in manual mode), QLab style.
+            HStack(spacing: 10) {
+                Button { state.stop() } label: {
+                    TransportButtonLabel(systemImage: "stop.fill", title: "STOP")
                 }
+                .buttonStyle(BigTransportButtonStyle(color: .red))
+                .help("Stop everything (Esc)")
+
+                Button { state.togglePlay() } label: {
+                    TransportButtonLabel(systemImage: state.isPlaying ? "pause.fill" : "play.fill",
+                                         title: playTitle)
+                }
+                .buttonStyle(BigTransportButtonStyle(color: .green))
                 .help(state.mode == .timecode ? "Play / pause (Space)" : "Play / pause (⌘↩)")
-                Button { state.skip(5) } label: { Image(systemName: "goforward.5") }
+
+                if state.mode == .manual {
+                    Button { state.goNextCue() } label: {
+                        TransportButtonLabel(systemImage: "arrowtriangle.right.fill", title: "GO")
+                    }
+                    .buttonStyle(BigTransportButtonStyle(color: .green, filled: true))
+                    .help("Fire next cue (Space)")
+                }
+
+                VStack(spacing: 4) {
+                    Button { state.skip(-5) } label: { Image(systemName: "gobackward.5") }
+                    Button { state.skip(5) } label: { Image(systemName: "goforward.5") }
+                }
+                .buttonStyle(.borderless)
+                .disabled(!canPlay)
             }
-            .controlSize(.large)
-            .disabled(state.project.songPath == nil)
 
             // Clock
             VStack(alignment: .leading, spacing: 0) {
@@ -62,22 +80,26 @@ struct TransportBar: View {
 
             Divider().frame(height: 30)
 
-            Picker("Mode", selection: $state.mode) {
-                Text("Timecode").tag(PlaybackMode.timecode)
-                Text("Manual").tag(PlaybackMode.manual)
+            HStack(spacing: 6) {
+                Text("Mode")
+                    .fixedSize()
+                Picker("Mode", selection: $state.mode) {
+                    Text("Timecode").tag(PlaybackMode.timecode)
+                    Text("Manual").tag(PlaybackMode.manual)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
             }
-            .pickerStyle(.segmented)
-            .frame(width: 170)
             .help("Timecode: cues fire automatically while the song plays. Manual: press Space to fire the next cue.")
 
-            if state.mode == .manual {
-                Button { state.goNextCue() } label: {
-                    Text("GO").font(.headline).frame(width: 46)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
-                .controlSize(.large)
-                .help("Fire next cue (Space)")
+            if let status = state.phaseDescription {
+                Text(status)
+                    .font(.callout.bold())
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+                    .frame(maxWidth: 240, alignment: .leading)
+            } else if state.mode == .manual {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Next: \(state.cueStack.next?.name ?? "— end —")").font(.callout.bold()).lineLimit(1)
                     Text("Current: \(state.cueStack.current?.name ?? "—")").font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -120,6 +142,14 @@ struct TransportBar: View {
         .background(.bar)
     }
 
+    private var canPlay: Bool { state.project.songPath != nil || state.setlist != nil }
+
+    private var playTitle: String {
+        if state.isPlaying { return "PAUSE" }
+        if state.setlist != nil, !state.phase.isRunning { return "START" }
+        return "PLAY"
+    }
+
     private var nextTrigger: ShowTrigger? {
         state.project.sortedTriggers.first { $0.enabled && $0.time > state.currentTime }
     }
@@ -128,6 +158,40 @@ struct TransportBar: View {
         guard let beats = state.project.analysis?.beats,
               let b = beats.last(where: { $0.time <= state.currentTime + 0.01 }) else { return "" }
         return "  ·  bar \(b.bar).\(b.beatInBar)"
+    }
+}
+
+struct TransportButtonLabel: View {
+    let systemImage: String
+    let title: String
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Image(systemName: systemImage).font(.system(size: 26, weight: .bold))
+            Text(title).font(.system(size: 11, weight: .heavy)).tracking(1)
+        }
+    }
+}
+
+/// Big square transport button with a thick coloured outline.
+struct BigTransportButtonStyle: ButtonStyle {
+    let color: Color
+    var filled = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(filled ? Color.white : color)
+            .frame(width: 84, height: 64)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(filled ? color.opacity(configuration.isPressed ? 0.7 : 0.9)
+                                 : color.opacity(configuration.isPressed ? 0.35 : 0.12))
+            )
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(color, lineWidth: 3))
+            .opacity(isEnabled ? 1 : 0.4)
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .contentShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 

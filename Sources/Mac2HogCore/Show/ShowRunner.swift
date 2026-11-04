@@ -54,8 +54,11 @@ public struct CueStack: Sendable {
     /// Index of the cue that fires on the next GO.
     public private(set) var nextIndex: Int = 0
 
+    /// `triggers` must be in cue-list order (see `ShowProject.sortedTriggers`).
     public init(triggers: [ShowTrigger]) {
-        cues = triggers.filter(\.enabled).sorted { $0.time < $1.time }
+        var ordered = triggers
+        CueTiming.normalize(&ordered)
+        cues = ordered.filter(\.enabled)
     }
 
     public var current: ShowTrigger? { nextIndex > 0 && nextIndex - 1 < cues.count ? cues[nextIndex - 1] : nil }
@@ -66,6 +69,23 @@ public struct CueStack: Sendable {
         guard nextIndex < cues.count else { return nil }
         defer { nextIndex += 1 }
         return cues[nextIndex]
+    }
+
+    /// GO in manual mode: returns the next cue plus every Follow / Wait cue chained behind it,
+    /// each with its delay (seconds after this GO), and moves the stack past the whole chain.
+    public mutating func goChain() -> [(trigger: ShowTrigger, delay: Double)] {
+        guard let first = go() else { return [] }
+        var chain = [(trigger: first, delay: 0.0)]
+        var previous = first
+        var at = 0.0
+        while nextIndex < cues.count, cues[nextIndex].startMode != .timecode {
+            let cue = cues[nextIndex]
+            at += CueTiming.offset(of: cue, after: previous)
+            chain.append((cue, at))
+            previous = cue
+            nextIndex += 1
+        }
+        return chain
     }
 
     /// Steps back one cue and returns the cue that is now "current" (to re-fire it).

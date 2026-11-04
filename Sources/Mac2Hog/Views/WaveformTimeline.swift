@@ -92,7 +92,8 @@ struct WaveformTimeline: View {
             .onChanged { v in
                 if dragMode == nil {
                     if let t = trigger(atX: v.startLocation.x, y: v.startLocation.y) {
-                        dragMode = .trigger(t.id)
+                        // Follow / Wait cues are positioned by their predecessor: select, don't drag.
+                        dragMode = t.startMode == .timecode ? .trigger(t.id) : .seek
                         state.selectedTriggerID = t.id
                     } else if v.startLocation.y > sectionBand + flagBand {
                         dragMode = .pan(startView: viewStart)
@@ -120,7 +121,7 @@ struct WaveformTimeline: View {
                 var draggingTrigger = false
                 if case .some(.trigger(_)) = dragMode { draggingTrigger = true }
                 if !moved && !draggingTrigger { state.seek(to: time(atX: v.location.x)) }
-                if draggingTrigger && moved { state.project.triggers.sort { $0.time < $1.time } }
+                if draggingTrigger && moved { state.project.normalizeCues() }
                 dragMode = nil
             }
     }
@@ -205,7 +206,8 @@ struct WaveformTimeline: View {
             let fired = t.id == state.lastFiredID
             let color: Color = !t.enabled ? .gray : (fired ? .green : (selected ? .yellow : .accentColor))
             ctx.stroke(Path { p in p.move(to: CGPoint(x: tx, y: sectionBand)); p.addLine(to: CGPoint(x: tx, y: size.height - 14)) },
-                       with: .color(color), lineWidth: selected ? 2.5 : 1.5)
+                       with: .color(color),
+                       style: StrokeStyle(lineWidth: selected ? 2.5 : 1.5, dash: t.startMode == .timecode ? [] : [4, 3]))
             let label = Text(t.name).font(.system(size: 10, weight: .semibold)).foregroundColor(.white)
             let resolved = ctx.resolve(label)
             let ls = resolved.measure(in: CGSize(width: 200, height: flagBand))

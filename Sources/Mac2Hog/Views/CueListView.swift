@@ -20,6 +20,11 @@ struct CueListView: View {
                     Text(state.project.timecode(at: t.time).description).font(.body.monospacedDigit())
                 }
                 .width(min: 90, ideal: 100)
+                TableColumn("Start") { (t: ShowTrigger) in
+                    Text(t.startDescription)
+                        .foregroundStyle(t.startMode == .timecode ? Color.secondary : Color.orange)
+                }
+                .width(min: 70, ideal: 90)
                 TableColumn("Name") { (t: ShowTrigger) in
                     Text(t.name).foregroundStyle(t.enabled ? Color.primary : Color.secondary)
                 }
@@ -50,7 +55,21 @@ struct CueListView: View {
 
             Divider()
             HStack(spacing: 8) {
-                Button { state.addTrigger(at: state.currentTime) } label: { Label("Add at playhead", systemImage: "plus") }
+                Button { state.addTrigger(at: state.currentTime) } label: {
+                    Label(state.editingState != nil ? "Add cue" : "Add at playhead", systemImage: "plus")
+                }
+                if !state.settings.predefinedTriggers.isEmpty {
+                    Menu {
+                        ForEach(state.settings.predefinedTriggers) { p in
+                            Button(p.name) {
+                                let t = state.addTrigger(at: state.currentTime, name: p.name)
+                                state.apply(p, to: t.id)
+                            }
+                        }
+                    } label: { Label("Add predefined", systemImage: "star") }
+                    .fixedSize()
+                    .help("Add a new cue that sends a predefined trigger")
+                }
                 Button { state.deleteTriggers(selection) } label: { Label("Delete", systemImage: "trash") }
                     .disabled(selection.isEmpty)
                 Button { fireSelected() } label: { Label("Fire selected", systemImage: "bolt.fill") }

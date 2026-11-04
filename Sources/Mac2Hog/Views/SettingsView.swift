@@ -11,8 +11,9 @@ struct SettingsView: View {
             TimecodeSettings().tabItem { Label("Timecode", systemImage: "clock") }
             SongSettings().tabItem { Label("Song", systemImage: "music.note") }
             ShowfileSettings().tabItem { Label("Showfile", systemImage: "doc.richtext") }
+            PredefinedSettings().tabItem { Label("Predefined", systemImage: "star") }
         }
-        .frame(width: 620, height: 520)
+        .frame(width: 720, height: 560)
     }
 }
 
@@ -191,6 +192,136 @@ struct SongSettings: View {
             } footer: {
                 Text("Changes apply the next time you analyze. Narrow the tempo range if the detected tempo is half or double the real tempo.")
                     .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+/// Reusable named triggers: a name plus the OSC command(s) sent to the Hog.
+/// They appear under "+ Add" in the cue inspector and as "Add predefined" in the cue list.
+struct PredefinedSettings: View {
+    @EnvironmentObject var state: AppState
+    @State private var selection: UUID?
+
+    var body: some View {
+        HSplitView {
+            VStack(spacing: 0) {
+                List(selection: $selection) {
+                    ForEach(state.settings.predefinedTriggers) { p in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(p.name.isEmpty ? "Untitled" : p.name).bold()
+                            Text(p.commands.isEmpty ? "No command" : p.commands.map(\.summary).joined(separator: ", "))
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        .tag(p.id)
+                    }
+                    .onMove { state.settings.predefinedTriggers.move(fromOffsets: $0, toOffset: $1) }
+                }
+                Divider()
+                HStack {
+                    Button { add() } label: { Image(systemName: "plus") }.help("New predefined trigger")
+                    Button { remove() } label: { Image(systemName: "minus") }.disabled(selection == nil)
+                    Button { duplicate() } label: { Image(systemName: "plus.square.on.square") }
+                        .disabled(selection == nil).help("Duplicate")
+                    Spacer()
+                }
+                .buttonStyle(.borderless)
+                .padding(6)
+            }
+            .frame(minWidth: 220, idealWidth: 240)
+
+            Group {
+                if let id = selection, state.settings.predefinedTriggers.contains(where: { $0.id == id }) {
+                    PredefinedEditor(predefined: Binding(
+                        get: { state.settings.predefinedTriggers.first { $0.id == id } ?? PredefinedTrigger(id: id, name: "") },
+                        set: { new in
+                            if let i = state.settings.predefinedTriggers.firstIndex(where: { $0.id == id }) {
+                                state.settings.predefinedTriggers[i] = new
+                            }
+                        }))
+                    .id(id)
+                } else {
+                    VStack(spacing: 8) {
+                        Image(systemName: "star").font(.largeTitle).foregroundStyle(.secondary)
+                        Text("Predefined triggers are reusable commands, e.g. “Blackout”, “Strobe hit” or “Smoke burst”.")
+                            .multilineTextAlignment(.center)
+                        Text("Create one with +, give it a name and choose the OSC command(s) to send. Add it to any cue with + Add in the cue inspector.")
+                            .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        Button("New Predefined Trigger") { add() }.padding(.top, 6)
+                    }
+                    .padding(30)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .frame(minWidth: 380)
+        }
+    }
+
+    private func add() {
+        let p = PredefinedTrigger(name: "New trigger \(state.settings.predefinedTriggers.count + 1)",
+                                  commands: [.go(.cuelist, state.project.show?.objects(of: .cuelist).first?.number ?? "1")])
+        state.settings.predefinedTriggers.append(p)
+        selection = p.id
+    }
+
+    private func remove() {
+        guard let id = selection else { return }
+        state.settings.predefinedTriggers.removeAll { $0.id == id }
+        selection = state.settings.predefinedTriggers.first?.id
+    }
+
+    private func duplicate() {
+        guard let id = selection, let p = state.settings.predefinedTriggers.first(where: { $0.id == id }) else { return }
+        let copy = PredefinedTrigger(name: p.name + " copy", commands: p.commands.map { $0.withNewID() })
+        state.settings.predefinedTriggers.append(copy)
+        selection = copy.id
+    }
+}
+
+struct PredefinedEditor: View {
+    @EnvironmentObject var state: AppState
+    @Binding var predefined: PredefinedTrigger
+
+    var body: some View {
+        Form {
+            Section("Name") {
+                TextField("Name", text: $predefined.name)
+            }
+            Section {
+                if predefined.commands.isEmpty {
+                    Text("Add the OSC command this trigger sends to the Hog.").foregroundStyle(.secondary)
+                }
+                ForEach($predefined.commands) { $command in
+                    CommandEditor(command: $command, show: state.project.show, mapper: state.mapper) {
+                        let id = command.id
+                        DispatchQueue.main.async { predefined.commands.removeAll { $0.id == id } }
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("OSC commands")
+                    Spacer()
+                    Menu {
+                        Button("Go Cuelist") { predefined.commands.append(.go(.cuelist, "1")) }
+                        Button("Goto Cue in Cuelist") { predefined.commands.append(HogCommand(action: .gotoCue)) }
+                        Button("Go Scene") { predefined.commands.append(.go(.scene, "1")) }
+                        Button("Go Macro") { predefined.commands.append(.go(.macro, "1")) }
+                        Button("Release Cuelist") { predefined.commands.append(HogCommand(action: .release)) }
+                        Divider()
+                        Button("Master Go") { predefined.commands.append(HogCommand(action: .masterGo)) }
+                        Button("Master Fader Level") { predefined.commands.append(HogCommand(action: .masterFader)) }
+                        Button("Main Go") { predefined.commands.append(HogCommand(action: .mainGo)) }
+                        Divider()
+                        Button("Custom OSC") { predefined.commands.append(HogCommand(action: .custom)) }
+                    } label: { Label("Add", systemImage: "plus") }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+            }
+            Section {
+                Button { state.engine.send(commands: predefined.commands) } label: { Label("Send now (test)", systemImage: "bolt.fill") }
+                    .disabled(predefined.commands.isEmpty)
             }
         }
         .formStyle(.grouped)

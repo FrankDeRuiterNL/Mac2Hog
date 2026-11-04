@@ -12,6 +12,29 @@ enum PlaybackMode: String, CaseIterable, Identifiable {
     var short: String { self == .timecode ? "Timecode" : "Manual" }
 }
 
+/// What is shown in the editor when a setlist is open.
+enum SetlistSelection: Hashable {
+    case song(UUID)
+    case state(SetlistState)
+}
+
+/// Where a running setlist currently is.
+enum SetlistPhase: Equatable {
+    case idle
+    case starting(until: Date)
+    case song(index: Int)
+    case waiting(afterIndex: Int, until: Date?)
+    case ending
+    case finished
+
+    var isRunning: Bool {
+        switch self {
+        case .idle, .finished: return false
+        default: return true
+        }
+    }
+}
+
 struct OSCLogEntry: Identifiable {
     let id = UUID()
     let date = Date()
@@ -37,7 +60,8 @@ final class AppState: ObservableObject {
                 configureFeedback()
             }
             if settings.ltcOnRightChannel != oldValue.ltcOnRightChannel { reloadPlayer() }
-            if settings.timecodeRate != oldValue.timecodeRate || settings.timecodeStartHour != oldValue.timecodeStartHour {
+            if editingState == nil,
+               settings.timecodeRate != oldValue.timecodeRate || settings.timecodeStartHour != oldValue.timecodeStartHour {
                 project.timecodeRate = settings.timecodeRate
                 project.timecodeStart = Timecode(hours: settings.timecodeStartHour, rate: settings.timecodeRate)
             }
@@ -46,10 +70,37 @@ final class AppState: ObservableObject {
 
     // MARK: Show document
     @Published var project = ShowProject() {
-        didSet { engine.setTriggers(project.triggers); cueStack = CueStack(triggers: project.triggers, keeping: cueStack) ; isDirty = true }
+        didSet {
+            // Keep the cue list ordered and Follow / Wait times up to date after every edit.
+            project.normalizeCues()
+            engine.setTriggers(project.triggers)
+            cueStack = CueStack(triggers: project.triggers, keeping: cueStack)
+            isDirty = true
+            writeBackToSetlist()
+        }
     }
     @Published var projectURL: URL?
     @Published var isDirty = false
+
+    // MARK: Setlist
+    /// nil = single-song show. Otherwise `project` is the song or state currently being edited.
+    @Published var setlist: Setlist?
+    @Published private(set) var selection: SetlistSelection?
+    @Published private(set) var phase: SetlistPhase = .idle
+    @Published private(set) var clock = Date()
+    private var phaseWork: DispatchWorkItem?
+    /// Last imported showfile, shared by every song and state of a setlist.
+    private var currentShow: HogShow?
+
+    var editingState: SetlistState? {
+        if case .state(let st)? = selection { return st }
+        return nil
+    }
+
+    var currentSongIndex: Int? {
+        guard case .song(let id)? = selection else { return nil }
+        return setlist?.songs.firstIndex { $0.id == id }
+    }
 
     // MARK: Playback
     @Published var mode: PlaybackMode = .timecode {
@@ -93,6 +144,7 @@ final class AppState: ObservableObject {
                               timecodeStart: Timecode(hours: settings.timecodeStartHour, rate: settings.timecodeRate))
         isDirty = false
         engine.onFire = { [weak self] event in self?.handle(event) }
+        engine.onSongFinished = { [weak self] in self?.songFinished() }
         configureNetwork()
         configureFeedback()
         if let path = settings.selectedShowfile, FileManager.default.fileExists(atPath: path) {
@@ -171,11 +223,32 @@ final class AppState: ObservableObject {
         if abs(t - currentTime) > 0.001 { currentTime = t }
         let playing = engine.isPlaying
         if playing != isPlaying { isPlaying = playing }
+        if phase.isRunning { clock = Date() }
     }
 
     var currentTimecode: Timecode { project.timecode(at: currentTime) }
 
-    func togglePlay() { isPlaying ? pause() : play() }
+    /// The big Play button / Space in timecode mode.
+    func togglePlay() {
+        if setlist != nil {
+            switch phase {
+            case .idle, .finished:
+                startSetlist(from: currentSongIndex.map { $0 } ?? -1)
+                return
+            case .waiting(let i, _):
+                startSong(at: i + 1)   // skip the rest of the pause
+                return
+            case .starting:
+                startSong(at: 0)
+                return
+            case .ending:
+                return
+            case .song:
+                break
+            }
+        }
+        isPlaying ? pause() : play()
+    }
 
     func play() {
         guard engine.hasAudio else { alertMessage = "Import a song first."; return }
@@ -186,10 +259,14 @@ final class AppState: ObservableObject {
     func pause() { engine.pause(); refreshTransport() }
 
     func stop() {
+        phaseWork?.cancel()
+        phaseWork = nil
+        phase = .idle
         engine.stop()
         if settings.sendReleaseOnStop {
             var seen = Set<String>()
-            let releases = project.triggers.flatMap(\.commands).filter(\.action.usesObject).compactMap { c -> HogCommand? in
+            let all = project.triggers + (setlist.map { $0.songs.flatMap(\.project.triggers) + $0.startingState + $0.waitingState + $0.endingState } ?? [])
+            let releases = all.flatMap(\.commands).filter(\.action.usesObject).compactMap { c -> HogCommand? in
                 guard seen.insert("\(c.objectKind.rawValue):\(c.objectNumber)").inserted else { return nil }
                 return HogCommand(action: .release, objectKind: c.objectKind, objectNumber: c.objectNumber)
             }
@@ -213,8 +290,10 @@ final class AppState: ObservableObject {
     // MARK: - Manual cue stack
 
     func goNextCue() {
-        guard let cue = cueStack.go() else { NSSound.beep(); return }
+        let chain = cueStack.goChain()
+        guard let cue = chain.first?.trigger else { NSSound.beep(); return }
         engine.fire(cue)
+        if chain.count > 1 { engine.schedule(Array(chain.dropFirst())) }
         selectedTriggerID = cue.id
         // Follow along in the song so the waveform shows where we are.
         if !isPlaying && engine.hasAudio { seek(to: cue.time) }
@@ -234,6 +313,7 @@ final class AppState: ObservableObject {
     // MARK: - Song import & analysis
 
     func importSongPanel() {
+        if setlist != nil { addSongsToSetlistPanel(); return }
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.mp3, .wav, .aiff, .mpeg4Audio, .audio]
         panel.message = "Choose a song (.wav or .mp3)"
@@ -276,11 +356,16 @@ final class AppState: ObservableObject {
         }
     }
 
-    func analyze() {
-        guard let path = project.songPath, !isAnalyzing else { return }
+    func analyze(completion: (() -> Void)? = nil) {
+        guard let path = project.songPath else { return }
+        runAnalysis(path: path, target: selection, cached: decodedAudio, completion: completion)
+    }
+
+    /// Analyzes `path`; the result goes to the song identified by `target` (nil = single-song project).
+    private func runAnalysis(path: String, target: SetlistSelection?, cached: MonoAudio?, completion: (() -> Void)?) {
+        guard !isAnalyzing else { return }
         let url = URL(fileURLWithPath: path)
         let options = settings.analyzerOptions
-        let cached = decodedAudio
         isAnalyzing = true
         analysisProgress = 0
         analysisStatus = "Decoding audio"
@@ -292,19 +377,29 @@ final class AppState: ObservableObject {
                 }
                 await MainActor.run {
                     guard let self else { return }
+                    self.isAnalyzing = false
+                    // The user may have switched to another setlist song meanwhile: store it on the right one.
+                    if self.selection != target, case .song(let id)? = target, var set = self.setlist,
+                       let i = set.songs.firstIndex(where: { $0.id == id }) {
+                        set.songs[i].project.analysis = result
+                        if set.songs[i].project.triggers.isEmpty { set.songs[i].project.triggers = TriggerGenerator().generate(from: result) }
+                        self.setlist = set
+                        completion?()
+                        return
+                    }
                     self.decodedAudio = audio
                     self.project.analysis = result
-                    self.isAnalyzing = false
                     self.analysisStatus = "Tempo \(String(format: "%.1f", result.bpm)) BPM · \(result.sections.count) sections · \(result.snares.count) snare hits · \(result.breaks.count) breaks"
                     if self.project.triggers.isEmpty {
                         self.project.triggers = TriggerGenerator().generate(from: result)
                     }
+                    completion?()
                 }
             } catch {
                 await MainActor.run {
                     self?.isAnalyzing = false
                     self?.analysisStatus = "Analysis failed"
-                    self?.alertMessage = error.localizedDescription
+                    self?.alertMessage = "\(url.lastPathComponent): \(error.localizedDescription)"
                 }
             }
         }
@@ -339,7 +434,12 @@ final class AppState: ObservableObject {
     func loadShowfile(_ url: URL, remember: Bool = true) {
         do {
             let show = try ShowfileImporter.importShow(from: url)
+            currentShow = show
             project.show = show
+            if var set = setlist {
+                for i in set.songs.indices { set.songs[i].project.show = show }
+                setlist = set
+            }
             if remember {
                 settings.remember(showfile: url.path)
                 settings.selectedShowfile = url.path
@@ -367,11 +467,19 @@ final class AppState: ObservableObject {
 
     @discardableResult
     func addTrigger(at time: Double, name: String? = nil, source: TriggerSource = .manual) -> ShowTrigger {
+        if editingState != nil {
+            // State cue lists have no song: new cues follow the previous one.
+            let first = project.triggers.isEmpty
+            let trigger = ShowTrigger(time: 0, name: name ?? "Cue \(project.triggers.count + 1)", source: .manual,
+                                      startMode: first ? .timecode : .follow, delay: 0)
+            project.triggers.append(trigger)
+            selectedTriggerID = trigger.id
+            return trigger
+        }
         var t = time
         if snapToBeat, source == .manual, let a = project.analysis { t = TriggerGenerator.snap(time, to: a, subdivision: 2) }
         let trigger = ShowTrigger(time: max(0, t), name: name ?? "Cue \(project.triggers.count + 1)", source: source)
         project.triggers.append(trigger)
-        project.triggers.sort { $0.time < $1.time }
         selectedTriggerID = trigger.id
         return trigger
     }
@@ -387,16 +495,15 @@ final class AppState: ObservableObject {
         copy.id = UUID()
         copy.commands = t.commands.map { $0.withNewID() }
         copy.name += " copy"
-        copy.time += 60 / (project.analysis?.bpm ?? 120)
-        project.triggers.append(copy)
-        project.triggers.sort { $0.time < $1.time }
+        if copy.startMode == .timecode { copy.time += 60 / (project.analysis?.bpm ?? 120) }
+        if let i = project.triggers.firstIndex(where: { $0.id == id }) { project.triggers.insert(copy, at: i + 1) } else { project.triggers.append(copy) }
         selectedTriggerID = copy.id
     }
 
     func generateTriggers(_ generator: TriggerGenerator, replace: Bool) {
         guard let a = project.analysis else { return }
         let generated = generator.generate(from: a)
-        if replace { project.triggers = generated } else { project.triggers = (project.triggers + generated).sorted { $0.time < $1.time } }
+        if replace { project.triggers = generated } else { project.triggers = project.triggers + generated }
     }
 
     /// Copies a command to every trigger of the same source (e.g. all snares).
@@ -407,32 +514,72 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Adds a predefined trigger's commands to a cue.
+    func apply(_ predefined: PredefinedTrigger, to id: UUID) {
+        binding(for: id)?.wrappedValue.commands.append(contentsOf: predefined.instantiate())
+    }
+
+    /// Saves a cue's commands as a new predefined trigger (Settings › Predefined).
+    func saveAsPredefined(_ trigger: ShowTrigger) {
+        let p = PredefinedTrigger(name: trigger.name, commands: trigger.commands.map { $0.withNewID() })
+        settings.predefinedTriggers.append(p)
+    }
+
     // MARK: - Documents
 
     func newProject() {
         guard confirmDiscard() else { return }
-        engine.stop()
+        stop()
+        setlist = nil
+        selection = nil
         project = ShowProject(timecodeRate: settings.timecodeRate, timecodeStart: Timecode(hours: settings.timecodeStartHour, rate: settings.timecodeRate),
-                              show: project.show)
+                              show: currentShow ?? project.show)
         projectURL = nil
         decodedAudio = nil
         reloadPlayer()
         isDirty = false
     }
 
+    func newSetlist() {
+        guard confirmDiscard() else { return }
+        stop()
+        selection = nil
+        projectURL = nil
+        setlist = Setlist()
+        selectInternal(.state(.starting))
+        isDirty = false
+    }
+
     func openProjectPanel() {
         guard confirmDiscard() else { return }
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [UTType(filenameExtension: ShowProject.fileExtension) ?? .json, .json]
+        panel.allowedContentTypes = [UTType(filenameExtension: ShowProject.fileExtension) ?? .json,
+                                     UTType(filenameExtension: Setlist.fileExtension) ?? .json, .json]
         if panel.runModal() == .OK, let url = panel.url { openProject(url) }
     }
 
     func openProject(_ url: URL) {
         do {
-            let p = try ShowProject.decode(Data(contentsOf: url))
+            let data = try Data(contentsOf: url)
+            stop()
+            if url.pathExtension.lowercased() == Setlist.fileExtension, let set = try? Setlist.decode(data) {
+                setlist = set
+                selection = nil
+                projectURL = url
+                if let show = set.songs.compactMap(\.project.show).first { currentShow = show }
+                selectInternal(set.songs.first.map { .song($0.id) } ?? .state(.starting))
+                let missing = set.songs.compactMap(\.project.songPath).filter { !FileManager.default.fileExists(atPath: $0) }
+                if !missing.isEmpty { alertMessage = "These songs could not be found:\n" + missing.joined(separator: "\n") }
+                isDirty = false
+                return
+            }
+            let p = try ShowProject.decode(data)
+            setlist = nil
+            selection = nil
             project = p
             projectURL = url
             decodedAudio = nil
+            if let show = p.show { currentShow = show }
             settings.timecodeRate = p.timecodeRate
             settings.timecodeStartHour = p.timecodeStart.hours
             if let path = p.songPath, !FileManager.default.fileExists(atPath: path) {
@@ -445,28 +592,209 @@ final class AppState: ObservableObject {
         }
     }
 
+    private var documentExtension: String { setlist != nil ? Setlist.fileExtension : ShowProject.fileExtension }
+
     func saveProject() {
-        guard let url = projectURL else { saveProjectAs(); return }
+        guard let url = projectURL, url.pathExtension.lowercased() == documentExtension else { saveProjectAs(); return }
         do {
-            try project.encoded().write(to: url, options: .atomic)
+            if let set = setlist { try set.encoded().write(to: url, options: .atomic) }
+            else { try project.encoded().write(to: url, options: .atomic) }
             isDirty = false
         } catch { alertMessage = "Save failed: \(error.localizedDescription)" }
     }
 
     func saveProjectAs() {
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [UTType(filenameExtension: ShowProject.fileExtension) ?? .json]
-        panel.nameFieldStringValue = "\(project.name).\(ShowProject.fileExtension)"
+        panel.allowedContentTypes = [UTType(filenameExtension: documentExtension) ?? .json]
+        panel.nameFieldStringValue = "\(setlist?.name ?? project.name).\(documentExtension)"
         if panel.runModal() == .OK, let url = panel.url { projectURL = url; saveProject() }
     }
 
     private func confirmDiscard() -> Bool {
-        guard isDirty, !project.triggers.isEmpty else { return true }
+        let hasContent = !project.triggers.isEmpty || !(setlist?.songs.isEmpty ?? true)
+        guard isDirty, hasContent else { return true }
         let alert = NSAlert()
-        alert.messageText = "Discard unsaved changes to “\(project.name)”?"
+        alert.messageText = "Discard unsaved changes to “\(setlist?.name ?? project.name)”?"
         alert.addButton(withTitle: "Discard")
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    // MARK: - Setlist editing
+
+    /// Switches the editor to a song or state of the setlist (not while the setlist is running).
+    func select(_ sel: SetlistSelection) {
+        guard !phase.isRunning else { return }
+        selectInternal(sel)
+    }
+
+    private func selectInternal(_ sel: SetlistSelection) {
+        guard let set = setlist else { return }
+        let wasDirty = isDirty
+        engine.stop()
+        selectedTriggerID = nil
+        selection = sel
+        decodedAudio = nil
+        switch sel {
+        case .song(let id):
+            guard let song = set.songs.first(where: { $0.id == id }) else { return }
+            project = song.project
+            if project.show == nil, let show = currentShow { project.show = show }
+            reloadPlayer()
+        case .state(let st):
+            project = ShowProject(name: st.displayName, timecodeRate: settings.timecodeRate,
+                                  timecodeStart: Timecode(rate: settings.timecodeRate),
+                                  triggers: set.cues(for: st), show: currentShow)
+            engine.load(player: nil)
+            duration = 0
+        }
+        cueStack.reset()
+        isDirty = wasDirty
+        refreshTransport()
+    }
+
+    private func writeBackToSetlist() {
+        guard var set = setlist, let sel = selection else { return }
+        switch sel {
+        case .song(let id):
+            guard let i = set.songs.firstIndex(where: { $0.id == id }) else { return }
+            set.songs[i].project = project
+        case .state(let st):
+            set.setCues(project.triggers, for: st)
+        }
+        setlist = set
+    }
+
+    func addSongsToSetlistPanel() {
+        if setlist == nil { newSetlist() }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.mp3, .wav, .aiff, .mpeg4Audio, .audio]
+        panel.allowsMultipleSelection = true
+        panel.message = "Choose one or more songs to add to the setlist"
+        guard panel.runModal() == .OK else { return }
+        addSongs(panel.urls)
+    }
+
+    func addSongs(_ urls: [URL]) {
+        guard var set = setlist, !urls.isEmpty else { return }
+        var added: [SetlistSong] = []
+        for url in urls {
+            var p = ShowProject(name: url.deletingPathExtension().lastPathComponent, songPath: url.path,
+                                timecodeRate: settings.timecodeRate,
+                                timecodeStart: Timecode(hours: settings.timecodeStartHour, rate: settings.timecodeRate))
+            p.show = currentShow
+            added.append(SetlistSong(project: p))
+            settings.remember(song: url.path)
+        }
+        set.songs += added
+        setlist = set
+        isDirty = true
+        selectInternal(.song(added[0].id))
+        analyzeAllUnanalyzed()
+    }
+
+    func removeSongs(_ ids: Set<UUID>) {
+        guard var set = setlist, !phase.isRunning else { return }
+        set.songs.removeAll { ids.contains($0.id) }
+        setlist = set
+        isDirty = true
+        if case .song(let id)? = selection, ids.contains(id) {
+            selectInternal(set.songs.first.map { .song($0.id) } ?? .state(.starting))
+        }
+    }
+
+    func moveSongs(from offsets: IndexSet, to destination: Int) {
+        guard var set = setlist, !phase.isRunning else { return }
+        set.songs.move(fromOffsets: offsets, toOffset: destination)
+        setlist = set
+        isDirty = true
+    }
+
+    func updateSetlist(_ change: (inout Setlist) -> Void) {
+        guard var set = setlist else { return }
+        change(&set)
+        setlist = set
+        isDirty = true
+    }
+
+    /// Analyzes the songs of the setlist that have no analysis yet, one after another.
+    func analyzeAllUnanalyzed() {
+        guard let set = setlist, !isAnalyzing else { return }
+        // Current song first, then the rest in setlist order.
+        let ordered = (currentSongIndex.map { [set.songs[$0]] } ?? []) + set.songs
+        guard let next = ordered.first(where: { $0.project.analysis == nil && $0.project.songPath != nil }),
+              let path = next.project.songPath else { return }
+        let isCurrent = selection == .song(next.id)
+        runAnalysis(path: path, target: .song(next.id), cached: isCurrent ? decodedAudio : nil) { [weak self] in
+            self?.analyzeAllUnanalyzed()
+        }
+    }
+
+    // MARK: - Setlist playback
+
+    /// Starts the setlist. `index` < 0 starts with the Starting state, otherwise at that song.
+    func startSetlist(from index: Int) {
+        guard let set = setlist, !set.songs.isEmpty else { alertMessage = "Add songs to the setlist first."; return }
+        stop()
+        if index <= 0 {
+            engine.runSequence(set.startingState)
+            let delay = max(set.startDelay, 0)
+            phase = .starting(until: Date().addingTimeInterval(delay))
+            schedulePhase(after: delay) { [weak self] in self?.startSong(at: 0) }
+        } else {
+            startSong(at: min(index, set.songs.count - 1))
+        }
+    }
+
+    func startSong(at index: Int) {
+        guard let set = setlist, set.songs.indices.contains(index) else { return }
+        phaseWork?.cancel()
+        engine.cancelScheduled()
+        selectInternal(.song(set.songs[index].id))
+        phase = .song(index: index)
+        engine.seek(to: 0)
+        if mode == .timecode { play() }
+    }
+
+    private func songFinished() {
+        guard let set = setlist, case .song(let i) = phase else { return }
+        if i + 1 < set.songs.count {
+            engine.runSequence(set.waitingState)
+            if set.autoAdvance {
+                let gap = set.gap(after: i)
+                phase = .waiting(afterIndex: i, until: Date().addingTimeInterval(gap))
+                schedulePhase(after: gap) { [weak self] in self?.startSong(at: i + 1) }
+            } else {
+                phase = .waiting(afterIndex: i, until: nil)
+            }
+        } else {
+            engine.runSequence(set.endingState)
+            phase = .ending
+            schedulePhase(after: CueTiming.length(of: set.endingState) + 0.5) { [weak self] in self?.phase = .finished }
+        }
+    }
+
+    private func schedulePhase(after seconds: Double, _ action: @escaping () -> Void) {
+        phaseWork?.cancel()
+        let work = DispatchWorkItem(block: action)
+        phaseWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+    }
+
+    /// Human readable status of a running setlist for the transport bar.
+    var phaseDescription: String? {
+        guard let set = setlist else { return nil }
+        func countdown(_ d: Date) -> String { String(format: "%.0f s", max(0, d.timeIntervalSince(clock))) }
+        switch phase {
+        case .idle: return nil
+        case .starting(let until): return "Starting state · first song in \(countdown(until))"
+        case .song(let i): return "Song \(i + 1) of \(set.songs.count): \(set.songs[i].name)"
+        case .waiting(let i, let until):
+            let next = set.songs.indices.contains(i + 1) ? set.songs[i + 1].name : ""
+            return until.map { "Waiting state · \(next) in \(countdown($0))" } ?? "Waiting state · press Play for \(next)"
+        case .ending: return "Ending state"
+        case .finished: return "Setlist finished"
+        }
     }
 
     func exportCueSheet() {

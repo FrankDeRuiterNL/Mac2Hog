@@ -20,9 +20,16 @@ final class ShowEngine: @unchecked Sendable {
     private var sender: OSCSender?
     private var mapper = HogOSCMapper()
     private var autoFire = true
+    private var scheduled: [DispatchWorkItem] = []
+    private let playerDelegate = PlayerDelegate()
 
     /// Delivered on the main queue.
     var onFire: ((FireEvent) -> Void)?
+    /// Called on the main queue when the song plays to its end (not on stop).
+    var onSongFinished: (() -> Void)? {
+        get { playerDelegate.onFinish }
+        set { playerDelegate.onFinish = newValue }
+    }
 
     init() {
         let t = DispatchSource.makeTimerSource(flags: .strict, queue: queue)
@@ -59,6 +66,7 @@ final class ShowEngine: @unchecked Sendable {
         queue.sync {
             self.player?.stop()
             self.player = player
+            self.player?.delegate = self.playerDelegate
             self.player?.prepareToPlay()
             self.runner.reset()
         }
@@ -78,6 +86,7 @@ final class ShowEngine: @unchecked Sendable {
     func pause() { player?.pause() }
 
     func stop() {
+        cancelScheduled()
         player?.stop()
         player?.currentTime = 0
         queue.sync { runner.seek(to: 0) }
@@ -97,6 +106,35 @@ final class ShowEngine: @unchecked Sendable {
         queue.async {
             let event = self.send(trigger: trigger, at: self.player?.currentTime ?? 0)
             DispatchQueue.main.async { self.onFire?(event) }
+        }
+    }
+
+    /// Fires cues after the given delays (seconds from now): Follow / Wait chains and state sequences.
+    func schedule(_ items: [(trigger: ShowTrigger, delay: Double)]) {
+        queue.async {
+            for item in items {
+                let work = DispatchWorkItem { [weak self] in
+                    guard let self else { return }
+                    let event = self.send(trigger: item.trigger, at: self.player?.currentTime ?? 0)
+                    DispatchQueue.main.async { self.onFire?(event) }
+                }
+                self.scheduled.append(work)
+                self.queue.asyncAfter(deadline: .now() + max(0, item.delay), execute: work)
+            }
+        }
+    }
+
+    /// Runs a state's cue list; cue times are seconds from now.
+    func runSequence(_ cues: [ShowTrigger]) {
+        var ordered = cues
+        CueTiming.normalize(&ordered)
+        schedule(ordered.filter(\.enabled).map { (trigger: $0, delay: $0.time) })
+    }
+
+    func cancelScheduled() {
+        queue.async {
+            self.scheduled.forEach { $0.cancel() }
+            self.scheduled.removeAll()
         }
     }
 
@@ -128,6 +166,13 @@ final class ShowEngine: @unchecked Sendable {
             error = "Console address not configured"
         }
         return FireEvent(trigger: trigger, messages: messages, error: error, songTime: time)
+    }
+
+    private final class PlayerDelegate: NSObject, AVAudioPlayerDelegate {
+        var onFinish: (() -> Void)?
+        func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+            DispatchQueue.main.async { self.onFinish?() }
+        }
     }
 
     private func tick() {

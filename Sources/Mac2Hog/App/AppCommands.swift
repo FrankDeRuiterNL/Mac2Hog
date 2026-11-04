@@ -7,10 +7,11 @@ struct AppCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
-            Button("New Show") { state.newProject() }.keyboardShortcut("n")
-            Button("Open Show…") { state.openProjectPanel() }.keyboardShortcut("o")
+            Button("New Single-Song Show") { state.newProject() }.keyboardShortcut("n")
+            Button("New Setlist") { state.newSetlist() }.keyboardShortcut("n", modifiers: [.command, .shift])
+            Button("Open Show or Setlist…") { state.openProjectPanel() }.keyboardShortcut("o")
             Divider()
-            Button("Import Song…") { state.importSongPanel() }.keyboardShortcut("i")
+            Button(state.setlist == nil ? "Import Song…" : "Add Songs to Setlist…") { state.importSongPanel() }.keyboardShortcut("i")
             Button("Import Hog 4 Showfile…") { state.importShowfilePanel() }.keyboardShortcut("i", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .saveItem) {
@@ -25,6 +26,9 @@ struct AppCommands: Commands {
             Button(state.isPlaying ? "Pause" : "Play") { state.togglePlay() }
                 .keyboardShortcut(.return, modifiers: [.command])
             Button("Stop") { state.stop() }.keyboardShortcut(".", modifiers: [.command])
+            if state.setlist != nil {
+                Button("Start Setlist From the Top") { state.startSetlist(from: -1) }
+            }
             Divider()
             Button("GO Next Cue") { state.goNextCue() }.keyboardShortcut("g", modifiers: [.command])
             Button("Back One Cue") { state.backCue() }.keyboardShortcut("b", modifiers: [.command])

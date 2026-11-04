@@ -34,6 +34,9 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var recentShowfiles: [String] = []
     public var selectedShowfile: String?
 
+    // Predefined triggers (reusable command sets)
+    public var predefinedTriggers: [PredefinedTrigger] = []
+
     public init() {}
 
     public var analyzerOptions: AudioAnalyzer.Options {
@@ -79,5 +82,6 @@ public struct AppSettings: Codable, Hashable, Sendable {
         recentSongs = (try? c.decode([String].self, forKey: .recentSongs)) ?? d.recentSongs
         recentShowfiles = (try? c.decode([String].self, forKey: .recentShowfiles)) ?? d.recentShowfiles
         selectedShowfile = try? c.decode(String.self, forKey: .selectedShowfile)
+        predefinedTriggers = (try? c.decode([PredefinedTrigger].self, forKey: .predefinedTriggers)) ?? d.predefinedTriggers
     }
 }

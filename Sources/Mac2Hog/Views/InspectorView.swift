@@ -31,15 +31,44 @@ struct TriggerEditor: View {
         Form {
             Section("Cue") {
                 TextField("Name", text: $trigger.name)
+                Picker("Start", selection: $trigger.startMode) {
+                    ForEach(CueStartMode.allCases) { Text($0.displayName).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                if trigger.startMode != .timecode {
+                    HStack {
+                        Text(trigger.startMode == .follow ? "Follow previous cue's start +" : "Wait for previous cue's end +")
+                        TextField("", value: $trigger.delay, format: .number)
+                            .frame(width: 60)
+                            .multilineTextAlignment(.trailing)
+                        Text("s")
+                    }
+                    Text(startExplanation).font(.caption).foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("Duration")
+                    TextField("", value: $trigger.duration, format: .number)
+                        .frame(width: 60)
+                        .multilineTextAlignment(.trailing)
+                    Text("s")
+                    Spacer()
+                    Text("how long this cue runs (fade time); a next Wait cue starts after it")
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                }
                 HStack {
                     TextField("Timecode", text: $timecodeText, onCommit: commitTimecode)
                         .font(.body.monospacedDigit())
                         .frame(width: 120)
+                        .disabled(trigger.startMode != .timecode)
                     Text(String(format: "%.3f s", trigger.time)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     Spacer()
-                    Button { nudge(-1) } label: { Image(systemName: "chevron.left") }.help("One beat earlier")
-                    Button { nudge(1) } label: { Image(systemName: "chevron.right") }.help("One beat later")
-                    Button("Playhead") { trigger.time = state.currentTime }.help("Move this cue to the playhead")
+                    if trigger.startMode == .timecode {
+                        Button { nudge(-1) } label: { Image(systemName: "chevron.left") }.help("One beat earlier")
+                        Button { nudge(1) } label: { Image(systemName: "chevron.right") }.help("One beat later")
+                        if state.editingState == nil {
+                            Button("Playhead") { trigger.time = state.currentTime }.help("Move this cue to the playhead")
+                        }
+                    }
                 }
                 .controlSize(.small)
                 HStack {
@@ -66,6 +95,14 @@ struct TriggerEditor: View {
                     Text("Hog 4 commands")
                     Spacer()
                     Menu {
+                        if !state.settings.predefinedTriggers.isEmpty {
+                            Section("Predefined") {
+                                ForEach(state.settings.predefinedTriggers) { p in
+                                    Button("★ \(p.name)") { trigger.commands.append(contentsOf: p.instantiate()) }
+                                }
+                            }
+                            Divider()
+                        }
                         Button("Go Cuelist") { add(.go(.cuelist, firstNumber(.cuelist))) }
                         Button("Goto Cue in Cuelist") { add(HogCommand(action: .gotoCue, objectNumber: firstNumber(.cuelist))) }
                         Button("Go Scene") { add(.go(.scene, firstNumber(.scene))) }
@@ -77,6 +114,12 @@ struct TriggerEditor: View {
                         Button("Main Go") { add(HogCommand(action: .mainGo)) }
                         Divider()
                         Button("Custom OSC") { add(HogCommand(action: .custom)) }
+                        Divider()
+                        if #available(macOS 14.0, *) {
+                            SettingsLink { Text("Manage Predefined Triggers…") }
+                        } else {
+                            Button("Manage Predefined Triggers…") { openSettings() }
+                        }
                     } label: { Label("Add", systemImage: "plus") }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
@@ -94,6 +137,10 @@ struct TriggerEditor: View {
                     }
                 }
                 .controlSize(.small)
+                if !trigger.commands.isEmpty {
+                    Button { state.saveAsPredefined(trigger) } label: { Label("Save commands as predefined trigger", systemImage: "star") }
+                        .controlSize(.small)
+                }
                 Button("Delete cue", role: .destructive) { state.deleteTriggers([trigger.id]) }
                     .controlSize(.small)
             }
@@ -101,6 +148,19 @@ struct TriggerEditor: View {
         .formStyle(.grouped)
         .onAppear { timecodeText = state.project.timecode(at: trigger.time).description }
         .onChange(of: trigger.time) { t in timecodeText = state.project.timecode(at: t).description }
+    }
+
+    private var startExplanation: String {
+        let d = trigger.delay == trigger.delay.rounded() ? String(Int(trigger.delay)) : String(format: "%.1f", trigger.delay)
+        switch trigger.startMode {
+        case .follow: return "Fires \(d) s after the previous cue fired."
+        case .wait: return "Fires \(d) s after the previous cue has finished (its start + its duration)."
+        case .timecode: return ""
+        }
+    }
+
+    private func openSettings() {
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
     }
 
     private func add(_ c: HogCommand) {

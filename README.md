@@ -9,9 +9,44 @@ A native macOS app that turns a song into a light show on an **ETC / High End Sy
 3. It generates **SMPTE timecode** for the whole song (24/25/29.97df/30 fps, starting at e.g. `01:00:00:00`).
 4. **Import your Hog 4 show** (XML export or CSV) and attach its **cuelists, scenes and macros** to cues
    on the song timeline. Mac2Hog converts them into the correct Hog 4 OSC messages.
-5. Run the show:
+5. Run the show with the big **STOP** (red) and **PLAY** (green) buttons:
    - **Timecode mode** – press Play (Space) and every cue fires automatically at its timecode.
-   - **Manual mode** – the cues form a cue stack; press **Space** to fire the next cue (GO).
+   - **Manual mode** – the cues form a cue stack; press **GO** / **Space** to fire the next cue.
+6. Or build a **setlist** of several songs that follow each other, with **Starting**, **Waiting** (between songs)
+   and **Ending** light states.
+
+### Cue start: Timecode, Follow, Wait
+
+Every cue has a start mode (inspector › Start, shown in the cue list's *Start* column):
+
+| Start | Fires |
+|---|---|
+| **Timecode** | at its own position in the song |
+| **Follow +5s** | 5 s after the previous cue *started* |
+| **Wait +10s** | 10 s after the previous cue *finished*, i.e. its start + its **Duration** (set the duration to the cue's fade/run time on the Hog) |
+
+Follow / Wait cues stay chained behind the cue before them in the list. In timecode mode their times are
+computed automatically. In manual mode a GO fires the cue plus its whole Follow / Wait chain with the right delays.
+
+### Predefined triggers
+
+*Settings › Predefined* holds reusable triggers: a name plus the OSC command(s) to send (e.g. “Blackout”,
+“Strobe hit”). Add them to the selected cue with **+ Add › Predefined** in the inspector, create a new cue from
+one with **Add predefined** under the cue list, or save a cue's commands with *Save commands as predefined trigger*.
+
+### Setlists
+
+Choose **Setlist** on the start screen (or *File › New Setlist*, ⇧⌘N) and add one or more songs. Every song works
+exactly like a single-song show (its own analysis, timecode and cues). In the setlist sidebar you can:
+
+- drag songs to reorder them, remove them, and set the **pause** after each song (default pause for all songs below);
+- edit the **Starting state** (fires when the setlist starts; the first song starts after *First song starts after* seconds),
+  the **Waiting state** (fires in every pause between songs) and the **Ending state** (fires after the last song).
+  State cues use seconds from the start of the state plus Follow / Wait;
+- choose whether the next song starts automatically after the pause, or waits for Play.
+
+**START** runs the setlist from the top (or from the selected song). STOP / Esc stops everything. Setlists are saved as
+`.mac2hogset` files with all songs embedded.
 
 ## Requirements
 
@@ -52,8 +87,10 @@ Every push builds the app and runs the tests on GitHub Actions; the built `Mac2H
 | Move a cue | Drag its flag on the waveform (snaps to the beat grid), or type a timecode in the inspector |
 | Attach console commands | Select a cue → inspector → **Add** (Go cuelist, goto cue, scene, macro, release, master go, fader, custom OSC) |
 | Same command on all snares | Inspector → *Copy to all Snare cues*, or attach it in Generate Cues |
+| Reusable commands | *Settings › Predefined*, then **+ Add › Predefined** on a cue |
+| Chain cues | Inspector › Start: Follow +n s / Wait +n s |
 | Run | Space = play/pause (timecode) or GO (manual), Esc = stop |
-| Save | *File › Save Show* (⌘S) – `.mac2hog` project with song path, analysis, cues and show objects |
+| Save | *File › Save Show* (⌘S) – `.mac2hog` project (single song) or `.mac2hogset` (setlist) |
 | Export | Cue sheet CSV, LTC WAV, or song + LTC stereo WAV |
 
 ### Timecode / LTC
