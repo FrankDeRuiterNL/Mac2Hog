@@ -300,7 +300,7 @@ struct CommandEditor: View {
             .frame(width: 56)
     }
 
-    /// Showfile picker (name + number) plus a number field for objects that aren't in the showfile.
+    /// Showfile picker (name + number), then the number itself with an up/down stepper.
     @ViewBuilder
     private var objectRow: some View {
         let objects = show?.objects(of: command.objectKind) ?? []
@@ -308,31 +308,23 @@ struct CommandEditor: View {
             if !objects.isEmpty {
                 Picker(command.objectKind.displayName, selection: Binding(
                     get: { command.objectNumber },
-                    set: { n in
-                        command.objectNumber = n
-                        command.label = objects.first { $0.number == n }?.name ?? ""
-                    })) {
+                    set: { setObject($0, objects: objects) })) {
                     ForEach(objects) { Text("\($0.number)  \($0.name)").tag($0.number) }
                     if !objects.contains(where: { $0.number == command.objectNumber }) {
                         Text("\(command.objectNumber) (not in showfile)").tag(command.objectNumber)
                     }
                 }
                 .labelsHidden()
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize()
             }
-            TextField("", text: Binding(get: { command.objectNumber }, set: { n in
-                command.objectNumber = n
-                command.label = show?.object(kind: command.objectKind, number: n)?.name ?? ""
-            }), prompt: Text("No."))
-            .labelsHidden()
-            .multilineTextAlignment(.trailing)
-            .frame(width: 56)
-            .help("\(command.objectKind.displayName) number")
-            if objects.isEmpty { Spacer(minLength: 0) }
+            numberStepper(prompt: "No.", help: "\(command.objectKind.displayName) number",
+                          text: Binding(get: { command.objectNumber }, set: { setObject($0, objects: objects) }),
+                          existing: objects.map(\.number))
+            Spacer(minLength: 0)
         }
     }
 
-    /// Cue picker from the imported cuelist plus a number field.
+    /// Cue picker from the imported cuelist, then the cue number with an up/down stepper.
     @ViewBuilder
     private var cueRow: some View {
         let cues = show?.object(kind: command.objectKind, number: command.objectNumber)?.cues ?? []
@@ -343,15 +335,31 @@ struct CommandEditor: View {
                     if !cues.contains(where: { $0.number == command.cueNumber }) { Text(command.cueNumber).tag(command.cueNumber) }
                 }
                 .labelsHidden()
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize()
             }
-            TextField("", text: $command.cueNumber, prompt: Text("Cue"))
+            numberStepper(prompt: "Cue", help: "Cue number", text: $command.cueNumber, existing: cues.map(\.number))
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func setObject(_ number: String, objects: [HogObject]) {
+        command.objectNumber = number
+        command.label = objects.first { $0.number == number }?.name ?? ""
+    }
+
+    /// Editable number with ▲▼. With a showfile the arrows step through the numbers that exist there.
+    private func numberStepper(prompt: String, help: String, text: Binding<String>, existing: [String]) -> some View {
+        HStack(spacing: 2) {
+            TextField("", text: text, prompt: Text(prompt))
                 .labelsHidden()
+                .textFieldStyle(.roundedBorder)
                 .multilineTextAlignment(.trailing)
                 .frame(width: 56)
-                .help("Cue number")
-            if cues.isEmpty { Spacer(minLength: 0) }
+            Stepper("", onIncrement: { text.wrappedValue = HogNumber.step(text.wrappedValue, by: 1, existing: existing) },
+                    onDecrement: { text.wrappedValue = HogNumber.step(text.wrappedValue, by: -1, existing: existing) })
+                .labelsHidden()
         }
+        .help(existing.isEmpty ? help : "\(help) — arrows step through the showfile")
     }
 }
 

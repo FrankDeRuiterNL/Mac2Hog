@@ -92,3 +92,23 @@ final class OSCAndHogTests: XCTestCase {
         }
     }
 }
+
+final class HogNumberTests: XCTestCase {
+    func testStepWithoutShowfile() {
+        XCTAssertEqual(HogNumber.step("1", by: 1), "2")
+        XCTAssertEqual(HogNumber.step("1", by: -1), "1")
+        XCTAssertEqual(HogNumber.step("2.5", by: 1), "3")
+        XCTAssertEqual(HogNumber.step("2.5", by: -1), "2")
+        XCTAssertEqual(HogNumber.step("", by: 1), "1")
+    }
+
+    func testStepThroughExistingNumbers() {
+        let cues = ["1", "2", "2.5", "10"]
+        XCTAssertEqual(HogNumber.step("2", by: 1, existing: cues), "2.5")
+        XCTAssertEqual(HogNumber.step("2.5", by: 1, existing: cues), "10")
+        XCTAssertEqual(HogNumber.step("10", by: 1, existing: cues), "10")
+        XCTAssertEqual(HogNumber.step("10", by: -1, existing: cues), "2.5")
+        XCTAssertEqual(HogNumber.step("1", by: -1, existing: cues), "1")
+        XCTAssertEqual(HogNumber.step("5", by: 1, existing: cues), "10")
+    }
+}

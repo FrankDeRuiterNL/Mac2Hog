@@ -3,6 +3,11 @@
 Mac2Hog follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The version lives in `VERSION`,
 `Sources/Mac2HogCore/Version.swift` and `Resources/Info.plist` (kept in sync by a unit test) and is bumped on every commit.
 
+## 0.1.5
+- Cue inspector: cuelist and cue numbers sit right next to their pickers (no longer at the far right) and have
+  up/down steppers. With a showfile loaded the steppers move to the next/previous existing cuelist or cue;
+  without one they count in whole numbers.
+
 ## 0.1.4
 - Cue inspector: command editor laid out as a label/control grid so cuelist and cue pickers use the available
   width instead of being pushed to the far right; number fields no longer show wrapped labels ("Cu e").

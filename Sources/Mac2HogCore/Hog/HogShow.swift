@@ -64,3 +64,26 @@ public struct HogShow: Codable, Hashable, Sendable {
 
     public var isEmpty: Bool { objects.isEmpty }
 }
+
+/// Stepping helpers for cuelist / scene / macro / cue numbers ("1", "2.5", "10").
+public enum HogNumber {
+    /// Next (`delta` > 0) or previous number. With `existing` numbers (from the showfile) it moves to the
+    /// neighbouring existing number; otherwise it counts in whole numbers, never below `minimum`.
+    public static func step(_ value: String, by delta: Int, existing: [String] = [], minimum: Double = 1) -> String {
+        let current = Double(value.trimmingCharacters(in: .whitespaces)) ?? 0
+        let sorted = existing.compactMap { s in Double(s).map { (s, $0) } }.sorted { $0.1 < $1.1 }
+        if !sorted.isEmpty {
+            if delta > 0 {
+                return (sorted.first { $0.1 > current + 1e-9 } ?? sorted.last!).0
+            } else {
+                return (sorted.last { $0.1 < current - 1e-9 } ?? sorted.first!).0
+            }
+        }
+        let isWhole = current == current.rounded()
+        var next: Double
+        if delta > 0 { next = isWhole ? current + 1 : current.rounded(.up) }
+        else { next = isWhole ? current - 1 : current.rounded(.down) }
+        next = max(minimum, next)
+        return String(Int(next))
+    }
+}
