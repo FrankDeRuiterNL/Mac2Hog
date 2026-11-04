@@ -12,8 +12,56 @@ struct SettingsView: View {
             SongSettings().tabItem { Label("Song", systemImage: "music.note") }
             ShowfileSettings().tabItem { Label("Showfile", systemImage: "doc.richtext") }
             PredefinedSettings().tabItem { Label("Predefined", systemImage: "star") }
+            AboutSettings().tabItem { Label("About", systemImage: "info.circle") }
         }
-        .frame(width: 720, height: 560)
+        .safeAreaInset(edge: .bottom, spacing: 0) { CopyrightFooter() }
+        .frame(width: 720, height: 590)
+    }
+}
+
+/// Shown centred at the bottom of every Settings tab.
+struct CopyrightFooter: View {
+    var body: some View {
+        // Markdown links in a string literal are rendered as clickable links by Text.
+        Text("© 2026 [Frankvandetechniek.](https://www.instagram.com/frankvandetechniek) [Mac2Hog Project.](https://github.com/Frankvandetechniek/Mac2Hog)")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .tint(.accentColor)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background(.bar)
+    }
+}
+
+struct AboutSettings: View {
+    var body: some View {
+        VStack(spacing: 14) {
+            Spacer()
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 128, height: 128)
+            Text("Mac2Hog").font(.largeTitle.bold())
+            Text("Version \(Mac2HogVersion.display)" + (Mac2HogVersion.build.map { " (build \($0))" } ?? ""))
+                .font(.title3.monospacedDigit())
+                .textSelection(.enabled)
+            Text("Turns songs into light shows on Hog lighting consoles over OSC: tempo, snare, break and song-part detection, timecode, cue lists and setlists.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: 440)
+            HStack(spacing: 16) {
+                Link("GitHub project", destination: URL(string: "https://github.com/Frankvandetechniek/Mac2Hog")!)
+                Link("Release notes", destination: URL(string: "https://github.com/Frankvandetechniek/Mac2Hog/blob/main/CHANGELOG.md")!)
+                Link("Instagram", destination: URL(string: "https://www.instagram.com/frankvandetechniek")!)
+            }
+            Text("Hog is a product of Electronic Theatre Controls. Mac2Hog is an independent project and is not affiliated with or endorsed by ETC.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 440)
+            Spacer()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -176,42 +224,45 @@ struct SongSettings: View {
 
     var body: some View {
         Form {
-            Section("Current song") {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(state.project.songPath.map { URL(fileURLWithPath: $0).lastPathComponent } ?? "None").bold()
-                        if let path = state.project.songPath {
-                            Text(path).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                        }
-                        if state.currentSongMissing {
-                            Label("Audio file not found — use Select File… to reconnect it", systemImage: "exclamationmark.triangle.fill")
-                                .font(.caption).foregroundStyle(.red)
+            if let set = state.setlist {
+                Section {
+                    if set.songs.isEmpty {
+                        HStack {
+                            Text("No songs in the setlist yet").foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Add Songs…") { state.importSongPanel() }
                         }
                     }
-                    Spacer()
-                    if state.project.songPath != nil && state.editingState == nil {
-                        Button("Select File…") { state.relinkSongPanel() }
-                            .help("Choose the audio file for this song. Keeps the analysis and cues; does not re-analyze.")
-                    } else {
-                        Button(state.setlist == nil ? "Import Song…" : "Add Songs…") { state.importSongPanel() }
+                    ForEach(Array(set.songs.enumerated()), id: \.element.id) { index, song in
+                        SongFileRow(number: index + 1, name: song.name, path: song.project.songPath,
+                                    analysis: song.project.analysis,
+                                    isCurrent: state.selection == .song(song.id),
+                                    onSelectFile: { state.relinkSongPanel(song.id) },
+                                    onReanalyze: { state.analyzeSong(song.id) })
+                        .contextMenu { Button("Rename Song…") { state.renameSongPrompt(song.id) } }
                     }
-                    Button("Re-analyze") { state.analyze() }
-                        .disabled(state.project.songPath == nil || state.isAnalyzing || state.currentSongMissing)
+                    analysisProgressRow
+                } header: {
+                    Text("Setlist songs")
+                } footer: {
+                    Text("Select File… only changes which audio file a song uses; its analysis and cues are kept. Right-click a song to rename it.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-                if state.isAnalyzing { ProgressView(value: state.analysisProgress) { Text(state.analysisStatus).font(.caption) } }
-                else if !state.analysisStatus.isEmpty { Text(state.analysisStatus).font(.caption).foregroundStyle(.secondary) }
-            }
-            Section("Recent songs") {
-                if state.settings.recentSongs.isEmpty { Text("No songs imported yet").foregroundStyle(.secondary) }
-                ForEach(state.settings.recentSongs, id: \.self) { path in
-                    HStack {
-                        Image(systemName: path == state.project.songPath ? "checkmark.circle.fill" : "music.note")
-                        Text(URL(fileURLWithPath: path).lastPathComponent)
-                        Spacer()
-                        if !FileManager.default.fileExists(atPath: path) { Text("missing").foregroundStyle(.red).font(.caption) }
-                        Button("Select") { state.importSong(URL(fileURLWithPath: path)) }
-                            .disabled(path == state.project.songPath || !FileManager.default.fileExists(atPath: path))
+            } else {
+                Section("Current song") {
+                    if state.project.songPath != nil {
+                        SongFileRow(number: nil, name: state.project.name, path: state.project.songPath,
+                                    analysis: state.project.analysis, isCurrent: true,
+                                    onSelectFile: { state.relinkSongPanel() },
+                                    onReanalyze: { state.analyze() })
+                    } else {
+                        HStack {
+                            Text("No song loaded").foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Import Song…") { state.importSongPanel() }
+                        }
                     }
+                    analysisProgressRow
                 }
             }
             Section {
@@ -367,6 +418,65 @@ struct PredefinedEditor: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+extension SongSettings {
+    @ViewBuilder
+    var analysisProgressRow: some View {
+        if state.isAnalyzing {
+            ProgressView(value: state.analysisProgress) { Text(state.analysisStatus).font(.caption) }
+        } else if !state.analysisStatus.isEmpty {
+            Text(state.analysisStatus).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// One song in Settings › Song: display name, audio file, and Select File… / Re-analyze.
+struct SongFileRow: View {
+    @EnvironmentObject var state: AppState
+    let number: Int?
+    let name: String
+    let path: String?
+    let analysis: AnalysisResult?
+    let isCurrent: Bool
+    let onSelectFile: () -> Void
+    let onReanalyze: () -> Void
+
+    private var missing: Bool { path.map { !FileManager.default.fileExists(atPath: $0) } ?? true }
+
+    var body: some View {
+        HStack(alignment: .top) {
+            if let number {
+                Text("\(number)").font(.body.monospacedDigit()).foregroundStyle(.secondary).frame(width: 20, alignment: .trailing)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(name).bold()
+                    if isCurrent && number != nil {
+                        Text("selected").font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+                if let path {
+                    Text(path).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        .help(path)
+                }
+                if missing {
+                    Label("Audio file not found — use Select File… to reconnect it", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(.red)
+                } else if let a = analysis {
+                    Text(String(format: "%.1f BPM · %@ · %d parts · %d snare hits", a.bpm, formatTime(a.duration), a.sections.count, a.snares.count))
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text("Not analysed yet").font(.caption).foregroundStyle(.orange)
+                }
+            }
+            Spacer()
+            Button("Select File…", action: onSelectFile)
+                .help("Choose the audio file for this song. Keeps the analysis and cues; does not re-analyze.")
+            Button("Re-analyze", action: onReanalyze)
+                .disabled(missing || state.isAnalyzing)
+        }
     }
 }
 

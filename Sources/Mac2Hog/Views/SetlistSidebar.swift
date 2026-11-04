@@ -36,6 +36,8 @@ struct SetlistSidebar: View {
                                 .tag(SetlistSelection.song(song.id))
                                 .contextMenu {
                                     Button("Start Setlist From Here") { state.startSetlist(from: index == 0 ? 0 : index) }
+                                    Button("Rename Song…") { state.renameSongPrompt(song.id) }
+                                    Button("Select Audio File…") { state.relinkSongPanel(song.id) }
                                     Button("Remove From Setlist", role: .destructive) { state.removeSongs([song.id]) }
                                 }
                         }

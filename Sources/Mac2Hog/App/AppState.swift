@@ -369,6 +369,62 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: - Setlist songs (rename / relink / analyse any song, not only the selected one)
+
+    /// Changes the display name of a setlist song. The audio file name is not touched.
+    func renameSong(_ id: UUID, to newName: String) {
+        let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        if selection == .song(id) {
+            project.name = name            // written back to the setlist by project.didSet
+        } else {
+            updateSetlist { set in
+                if let i = set.songs.firstIndex(where: { $0.id == id }) { set.songs[i].project.name = name }
+            }
+        }
+    }
+
+    /// Asks for a new display name (right-click › Rename Song… in the setlist).
+    func renameSongPrompt(_ id: UUID) {
+        guard let song = setlist?.songs.first(where: { $0.id == id }) else { return }
+        let alert = NSAlert()
+        alert.messageText = "Rename Song"
+        alert.informativeText = "This is the name shown in Mac2Hog. The audio file is not renamed."
+        let field = NSTextField(string: song.name)
+        field.frame = NSRect(x: 0, y: 0, width: 280, height: 24)
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Rename")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = field
+        if alert.runModal() == .alertFirstButtonReturn { renameSong(id, to: field.stringValue) }
+    }
+
+    /// Select File… for any setlist song: replaces only its audio path (no re-analysis).
+    func relinkSongPanel(_ id: UUID) {
+        if selection == .song(id) { relinkSongPanel(); return }
+        guard let song = setlist?.songs.first(where: { $0.id == id }) else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.mp3, .wav, .aiff, .mpeg4Audio, .audio]
+        panel.message = "Select the audio file for “\(song.name)”"
+        if let old = song.project.songPath {
+            let dir = URL(fileURLWithPath: old).deletingLastPathComponent()
+            if FileManager.default.fileExists(atPath: dir.path) { panel.directoryURL = dir }
+        }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        updateSetlist { set in
+            if let i = set.songs.firstIndex(where: { $0.id == id }) { set.songs[i].project.songPath = url.path }
+        }
+        settings.remember(song: url.path)
+        analysisStatus = "Linked \(url.lastPathComponent) to “\(song.name)”"
+    }
+
+    /// Re-analyses any setlist song; the result is stored on that song.
+    func analyzeSong(_ id: UUID) {
+        if selection == .song(id) { analyze(); return }
+        guard let path = setlist?.songs.first(where: { $0.id == id })?.project.songPath else { return }
+        runAnalysis(path: path, target: .song(id), cached: nil, completion: nil)
+    }
+
     var currentSongMissing: Bool {
         guard let path = project.songPath else { return false }
         return !FileManager.default.fileExists(atPath: path)

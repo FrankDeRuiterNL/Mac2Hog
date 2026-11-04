@@ -52,6 +52,11 @@ to the Autosave folder (*File › Show Autosave Folder*). Single-song shows auto
 **START** runs the setlist from the top (or from the selected song). STOP / Esc stops everything. Setlists are saved as
 `.mac2hogset` files with all songs embedded.
 
+## Version
+
+Current version: **0.1.3**. Mac2Hog uses [Semantic Versioning](https://semver.org); see [CHANGELOG.md](CHANGELOG.md).
+The version is shown in *Settings › About*.
+
 ## Requirements
 
 - macOS 13 Ventura or later

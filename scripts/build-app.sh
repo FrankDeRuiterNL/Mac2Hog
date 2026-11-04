@@ -13,6 +13,12 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Mac2Hog"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
+# Version (Semantic Versioning) from the VERSION file; build number = number of commits.
+VERSION=$(tr -d '[:space:]' < VERSION)
+BUILD=$(git rev-list --count HEAD 2>/dev/null || echo 1)
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$APP/Contents/Info.plist"
+
 # App icon: the classic .icns (CFBundleIconFile) plus, when Xcode's actool is available,
 # the compiled asset catalog (Assets.car, CFBundleIconName = AppIcon).
 cp Resources/AppIcon/Mac2Hog.icns "$APP/Contents/Resources/Mac2Hog.icns"
@@ -29,4 +35,4 @@ fi
 codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || echo "warning: codesign failed (app will still run locally)"
 
 (cd build && rm -f Mac2Hog.zip && ditto -c -k --keepParent Mac2Hog.app Mac2Hog.zip)
-echo "Built $APP"
+echo "Built $APP (v$VERSION, build $BUILD)"
