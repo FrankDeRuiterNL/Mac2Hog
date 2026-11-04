@@ -1,3 +1,5 @@
+<img width="1942" height="809" alt="image" src="https://github.com/user-attachments/assets/4a10e0dc-0acb-4295-bbb2-114ee52d5c7e" />
+
 # Mac2Hog
 
 A native macOS app that turns a song into a light show on an **ETC / High End Systems Hog 4** console
