@@ -111,7 +111,8 @@ final class ShowEngine: @unchecked Sendable {
 
     /// Fires cues after the given delays (seconds from now): Follow / Wait chains and state sequences.
     func schedule(_ items: [(trigger: ShowTrigger, delay: Double)]) {
-        queue.async {
+        queue.async { [weak self] in
+            guard let self else { return }
             for item in items {
                 let work = DispatchWorkItem { [weak self] in
                     guard let self else { return }

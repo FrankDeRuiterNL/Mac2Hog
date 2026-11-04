@@ -18,8 +18,8 @@ struct SetlistSidebar: View {
                         .font(.caption).foregroundStyle(.secondary)
                     if let saved = state.lastAutosave {
                         Label {
-                            Text("Auto-saved \(saved, format: .dateTime.hour().minute().second())" +
-                                 (state.projectURL == nil ? " (Autosave folder — use Save As to choose a file)" : ""))
+                            Text("Auto-saved ") + Text(saved, format: .dateTime.hour().minute().second())
+                                + Text(state.projectURL == nil ? " (Autosave folder — use Save As to choose a file)" : "")
                         } icon: { Image(systemName: "checkmark.icloud") }
                         .font(.caption2).foregroundStyle(.secondary)
                     }

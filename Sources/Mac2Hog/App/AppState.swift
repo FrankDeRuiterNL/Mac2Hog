@@ -382,14 +382,14 @@ final class AppState: ObservableObject {
         isAnalyzing = true
         analysisProgress = 0
         analysisStatus = "Decoding audio"
-        Task.detached(priority: .userInitiated) { [weak self] in
+        // AppState is main-actor isolated (Sendable) and lives as long as the app, so a strong capture is fine.
+        Task.detached(priority: .userInitiated) { [self] in
             do {
                 let audio = try cached ?? AudioDecoder.decode(url: url)
                 let result = AudioAnalyzer(options: options).analyze(audio) { p, status in
-                    Task { @MainActor in self?.analysisProgress = p; self?.analysisStatus = status }
+                    Task { @MainActor in self.analysisProgress = p; self.analysisStatus = status }
                 }
                 await MainActor.run {
-                    guard let self else { return }
                     self.isAnalyzing = false
                     // The user may have switched to another setlist song meanwhile: store it on the right one.
                     if self.selection != target, case .song(let id)? = target, var set = self.setlist,
@@ -410,9 +410,9 @@ final class AppState: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    self?.isAnalyzing = false
-                    self?.analysisStatus = "Analysis failed"
-                    self?.alertMessage = "\(url.lastPathComponent): \(error.localizedDescription)"
+                    self.isAnalyzing = false
+                    self.analysisStatus = "Analysis failed"
+                    self.alertMessage = "\(url.lastPathComponent): \(error.localizedDescription)"
                 }
             }
         }
@@ -675,9 +675,9 @@ final class AppState: ObservableObject {
             return
         }
         let savedToDocument = url == projectURL
-        DispatchQueue.global(qos: .utility).async {
+        DispatchQueue.global(qos: .utility).async { [weak self] in
             let ok = (try? data.write(to: url, options: .atomic)) != nil
-            DispatchQueue.main.async { [weak self] in
+            DispatchQueue.main.async {
                 guard let self, ok else { return }
                 self.lastAutosave = Date()
                 if savedToDocument { self.isDirty = false }
