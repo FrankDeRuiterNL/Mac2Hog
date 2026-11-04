@@ -5,15 +5,14 @@
 <img width="1942" height="809" alt="image" src="https://github.com/user-attachments/assets/4a10e0dc-0acb-4295-bbb2-114ee52d5c7e" />
 
 
-A native macOS app that turns a song into a light show on an **ETC / High End Systems Hog 4** console
-(Hog 4, Full Boar 4, Road Hog 4, Nano Hog 4, Hedgehog 4/4X, Hog 4 PC), controlled over **OSC**.
+A native macOS app that turns a song into a light show on an **ETC / High End Systems Hog 4 or Hog 5** console, controlled over **OSC**.
 
 1. **Import a song** (`.wav` or `.mp3`, also `.aiff`, `.m4a`).
 2. Mac2Hog **analyses** it: main tempo (with alternatives), beat grid and bars, **snare hits**, kick hits,
    **breaks**, and **song parts** (intro, verse, build-up, chorus/drop, break, bridge, outro).
 3. It generates **SMPTE timecode** for the whole song (24/25/29.97df/30 fps, starting at e.g. `01:00:00:00`).
-4. **Import your Hog 4 show** (XML export or CSV) and attach its **cuelists, scenes and macros** to cues
-   on the song timeline. Mac2Hog converts them into the correct Hog 4 OSC messages.
+4. **Import your Hog show** (XML export or CSV) and attach its **cuelists, scenes and macros** to cues
+   on the song timeline. Mac2Hog converts them into the correct Hog OSC messages.
 5. Run the show with the big **STOP** (red) and **PLAY** (green) buttons:
    - **Timecode mode** – press Play (Space) and every cue fires automatically at its timecode.
    - **Manual mode** – the cues form a cue stack; press **GO** / **Space** to fire the next cue.
@@ -60,7 +59,7 @@ to the Autosave folder (*File › Show Autosave Folder*). Single-song shows auto
 
 - macOS 13 Ventura or later
 - Xcode 15+ (or the Swift 5.9+ toolchain) to build
-- A Hog 4 console / Hog 4 PC on the same network with OSC input enabled
+- A Hog console / Hog PC on the same network with OSC input enabled
 
 ## Build & run
 
@@ -84,7 +83,7 @@ only changes the audio path and keeps the analysis and cues. Use *Re-analyze* yo
 Run the engine tests with `swift test` (the core engine also builds and tests on Linux).
 Every push builds the app and runs the tests on GitHub Actions; the built `Mac2Hog.app` is attached to the run as an artifact.
 
-## Setting up the Hog 4
+## Setting up the Hog
 
 1. On the console: **Setup → Control Panel → Network** → enable **OSC In** and note the port (Mac2Hog uses 7001 by default).
 2. Optional: enable **OSC Out** to your Mac's IP / port 7002 to see console feedback in Mac2Hog's OSC log.
@@ -96,7 +95,7 @@ Every push builds the app and runs the tests on GitHub Actions; the built `Mac2H
 |---|---|
 | Import song / pick a recent one | *File › Import Song* (⌘I) or *Settings › Song* |
 | Correct the tempo (×2, ÷2, type a BPM, shift bar start) | Tempo field in the transport bar, *Song Analysis* tab |
-| Import the Hog showfile / pick a recent one | *File › Import Hog 4 Showfile* (⇧⌘I) or *Settings › Showfile* |
+| Import the Hog showfile / pick a recent one | *File › Import Hog Showfile* (⇧⌘I) or *Settings › Showfile* |
 | Generate cues from parts / breaks / snares / every N bars | **Generate Cues** button |
 | Add a cue | Double-click the waveform, ⌘T at the playhead, or **Start/End/Add trigger** in the *Song Analysis* tab |
 | Move a cue | Drag its flag on the waveform (snaps to the beat grid), or type a timecode in the inspector |
@@ -115,9 +114,9 @@ playback) and has a latency compensation setting. If you also want the Hog to ch
 *Settings › Timecode › Play LTC on the right channel* (song on the left) and feed the right channel into the
 Hog's LTC input, or export an LTC WAV.
 
-## Hog 4 OSC mapping
+## Hog OSC mapping
 
-From the Hog 4 OS manual, *OSC Mappings*:
+From the Hog OS manual, *OSC Mappings*:
 
 | Command | OSC |
 |---|---|
@@ -140,7 +139,7 @@ list.cue in the address, float, two arguments) so you can pick the one your Hog 
 
 ## Showfile import
 
-A native Hog 4 `.shw` show is a proprietary binary database that only Hog OS can read. Mac2Hog imports:
+A native Hog `.shw` show is a proprietary binary database that only Hog OS can read. Mac2Hog imports:
 
 - **Hog XML exports**: in Hog OS open the Cuelist, Scene or Macro directory, select the items and choose
   *Export* (or export the show to XML). Hog OS v5 exports (`xml_show` schema) keep each object's number and name in a
