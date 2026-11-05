@@ -164,3 +164,33 @@ final class HardwareSettingsTests: XCTestCase {
         XCTAssertNil(s.networkInterface)
     }
 }
+
+final class MilluminTests: XCTestCase {
+    func testDefaultAddressAndStringValue() {
+        let cmd = HogCommand(action: .milluminCustom, milluminValue: "start")
+        XCTAssertEqual(MilluminOSCMapper().messages(for: cmd), [OSCMessage("/m2h/millumin", [.string("start")])])
+        XCTAssertTrue(HogOSCMapper().messages(for: cmd).isEmpty, "Millumin commands never go to the Hog")
+        XCTAssertEqual(cmd.summary, "Millumin /millumin start")
+    }
+
+    func testCustomPrefixTopicAndNumbers() {
+        var cfg = MilluminOSCConfiguration()
+        cfg.addressPrefix = "show/"
+        let mapper = MilluminOSCMapper(configuration: cfg)
+        let half = HogCommand(action: .milluminCustom, milluminTopic: "layer/1/opacity", milluminValue: "0,5")
+        XCTAssertEqual(mapper.messages(for: half), [OSCMessage("/show/layer/1/opacity", [.float(0.5)])])
+        let press = HogCommand(action: .milluminCustom, milluminPrefix: "/x", milluminTopic: "/go", milluminValue: "1")
+        XCTAssertEqual(mapper.messages(for: press), [OSCMessage("/x/go", [.float(1)]), OSCMessage("/x/go", [.float(0)])])
+        cfg.sendKeyRelease = false
+        cfg.numberFormat = .int
+        XCTAssertEqual(MilluminOSCMapper(configuration: cfg).messages(for: press), [OSCMessage("/x/go", [.int(1)])])
+        let empty = HogCommand(action: .milluminCustom, milluminTopic: "/stop")
+        XCTAssertEqual(mapper.messages(for: empty), [OSCMessage("/show/stop")])
+    }
+
+    func testSettingsDefaults() throws {
+        let s = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
+        XCTAssertEqual(s.milluminPort, 5000)
+        XCTAssertEqual(s.milluminOSC.addressPrefix, "/m2h")
+    }
+}

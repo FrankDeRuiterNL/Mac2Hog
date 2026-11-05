@@ -3,6 +3,14 @@
 Mac2Hog follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The version lives in `VERSION`,
 `Sources/Mac2HogCore/Version.swift` and `Resources/Info.plist` (kept in sync by a unit test) and is bumped on every commit.
 
+## 0.9.0
+- Millumin: Settings › Network has a Millumin section (IP/hostname, OSC input port, status, Apply, Send test
+  message); Settings › OSC has "Millumin Message Format" (address prefix, default /m2h; number arguments; key release).
+- New cue command "Millumin Custom OSC" with Prefix (default: Settings prefix), Topic (default /millumin) and Value
+  (text or number), sent to Millumin as e.g. `/m2h/millumin start`.
+- Settings › OSC: Hog fields renamed to "Hog Message Format", "Hog address prefix", "Hog number arguments",
+  "Hog goto cue format"; "Goto cue test" is now "Hog Goto Cue Test".
+
 ## 0.8.0
 - Cue list: "Duplicate cue" is now "Duplicate to playhead": the selected cue is copied ("Copy of …") to a new
   Timecode cue at the current playhead position. In setlist states (no song) it still duplicates directly below.

@@ -188,6 +188,7 @@ struct TriggerEditor: View {
                         Button("Main Go") { add(HogCommand(action: .mainGo)) }
                         Divider()
                         Button("Custom OSC") { add(HogCommand(action: .custom)) }
+                        Button("Millumin Custom OSC") { add(HogCommand(action: .milluminCustom)) }
                         Divider()
                         if #available(macOS 14.0, *) {
                             SettingsLink { Text("Manage Predefined Triggers…") }
@@ -244,6 +245,7 @@ struct TriggerEditor: View {
 }
 
 struct CommandEditor: View {
+    @EnvironmentObject var state: AppState
     @Binding var command: HogCommand
     let show: HogShow?
     let mapper: HogOSCMapper
@@ -356,6 +358,33 @@ struct CommandEditor: View {
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                if command.action == .milluminCustom {
+                    GridRow {
+                        label("Prefix")
+                        TextField("", text: optionalText(\.milluminPrefix),
+                                  prompt: Text(state.settings.milluminOSC.addressPrefix.isEmpty
+                                               ? MilluminOSCMapper.defaultPrefix : state.settings.milluminOSC.addressPrefix))
+                            .labelsHidden()
+                            .textFieldStyle(.roundedBorder)
+                            .font(.body.monospaced())
+                            .help("Empty uses the Millumin address prefix from Settings › OSC")
+                    }
+                    GridRow {
+                        label("Topic")
+                        TextField("", text: optionalText(\.milluminTopic), prompt: Text(MilluminOSCMapper.defaultTopic))
+                            .labelsHidden()
+                            .textFieldStyle(.roundedBorder)
+                            .font(.body.monospaced())
+                    }
+                    GridRow {
+                        label("Value")
+                        TextField("", text: optionalText(\.milluminValue), prompt: Text("e.g. start or 1"))
+                            .labelsHidden()
+                            .textFieldStyle(.roundedBorder)
+                            .font(.body.monospaced())
+                            .help("Text or a number; empty sends no value")
+                    }
+                }
                 if command.action == .custom {
                     GridRow {
                         label("Address")
@@ -377,7 +406,9 @@ struct CommandEditor: View {
                     .font(.caption).foregroundStyle(.orange)
             }
 
-            Text(mapper.messages(for: command).map(\.description).joined(separator: "\n").ifEmpty("(invalid OSC address)"))
+            Text((command.action.isMillumin
+                  ? "→ Millumin  " + state.milluminMapper.messages(for: command).map(\.description).joined(separator: "\n")
+                  : mapper.messages(for: command).map(\.description).joined(separator: "\n")).ifEmpty("(invalid OSC address)"))
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
@@ -386,6 +417,12 @@ struct CommandEditor: View {
     }
 
     private func label(_ text: String) -> some View { InspectorLabel(text) }
+
+    /// Binding for an optional text field of the command (empty ↔ nil = use the placeholder default).
+    private func optionalText(_ keyPath: WritableKeyPath<HogCommand, String?>) -> Binding<String> {
+        Binding(get: { command[keyPath: keyPath] ?? "" },
+                set: { command[keyPath: keyPath] = $0.isEmpty ? nil : $0 })
+    }
 
     private func numberField(_ prompt: String, value: Binding<Int>) -> some View {
         TextField("", value: value, format: .number.grouping(.never), prompt: Text(prompt))

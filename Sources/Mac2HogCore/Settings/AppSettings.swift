@@ -10,6 +10,12 @@ public struct AppSettings: Codable, Hashable, Sendable {
     public var feedbackEnabled: Bool = false
     public var feedbackPort: UInt16 = 7002
 
+    // Millumin
+    public var milluminHost: String = "127.0.0.1"
+    /// Millumin's OSC input port (Millumin › Device manager › OSC).
+    public var milluminPort: UInt16 = 5000
+    public var milluminOSC = MilluminOSCConfiguration()
+
     // OSC
     public var osc = HogOSCConfiguration()
     /// Milliseconds to fire triggers early to compensate network/console latency.
@@ -88,6 +94,9 @@ public struct AppSettings: Codable, Hashable, Sendable {
         feedbackEnabled = (try? c.decode(Bool.self, forKey: .feedbackEnabled)) ?? d.feedbackEnabled
         feedbackPort = (try? c.decode(UInt16.self, forKey: .feedbackPort)) ?? d.feedbackPort
         osc = (try? c.decode(HogOSCConfiguration.self, forKey: .osc)) ?? d.osc
+        milluminHost = (try? c.decode(String.self, forKey: .milluminHost)) ?? d.milluminHost
+        milluminPort = (try? c.decode(UInt16.self, forKey: .milluminPort)) ?? d.milluminPort
+        milluminOSC = (try? c.decode(MilluminOSCConfiguration.self, forKey: .milluminOSC)) ?? d.milluminOSC
         latencyCompensationMs = (try? c.decode(Double.self, forKey: .latencyCompensationMs)) ?? d.latencyCompensationMs
         sendReleaseOnStop = (try? c.decode(Bool.self, forKey: .sendReleaseOnStop)) ?? d.sendReleaseOnStop
         timecodeRate = (try? c.decode(TimecodeRate.self, forKey: .timecodeRate)) ?? d.timecodeRate

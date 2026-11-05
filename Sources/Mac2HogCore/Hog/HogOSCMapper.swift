@@ -139,6 +139,86 @@ public struct HogOSCMapper: Sendable {
             let address = command.customAddress.trimmingCharacters(in: .whitespaces)
             guard address.hasPrefix("/") else { return [] }
             return [OSCMessage(address, OSCMessage.parseArguments(command.customArguments))]
+        case .milluminCustom:
+            return []   // sent to Millumin by MilluminOSCMapper, not to the Hog
         }
+    }
+}
+
+// MARK: - Millumin
+
+public struct MilluminOSCConfiguration: Codable, Hashable, Sendable {
+    public var addressPrefix: String = MilluminOSCMapper.defaultPrefix
+    public var numberFormat: OSCNumberFormat = .float
+    /// A value of 1 is followed by a 0 (like a key press and release).
+    public var sendKeyRelease: Bool = true
+
+    public init() {}
+
+    private enum CodingKeys: String, CodingKey { case addressPrefix, numberFormat, sendKeyRelease }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        addressPrefix = (try? c.decode(String.self, forKey: .addressPrefix)) ?? MilluminOSCMapper.defaultPrefix
+        numberFormat = (try? c.decode(OSCNumberFormat.self, forKey: .numberFormat)) ?? .float
+        sendKeyRelease = (try? c.decode(Bool.self, forKey: .sendKeyRelease)) ?? true
+    }
+}
+
+/// Builds the OSC for "Millumin Custom OSC" commands: `<prefix><topic> <value>`, e.g. `/m2h/millumin start`.
+public struct MilluminOSCMapper: Sendable {
+    public static let defaultPrefix = "/m2h"
+    public static let defaultTopic = "/millumin"
+
+    public var configuration: MilluminOSCConfiguration
+
+    public init(configuration: MilluminOSCConfiguration = MilluminOSCConfiguration()) {
+        self.configuration = configuration
+    }
+
+    static func path(_ text: String) -> String {
+        var p = text.trimmingCharacters(in: .whitespaces)
+        while p.hasSuffix("/") { p.removeLast() }
+        if !p.isEmpty && !p.hasPrefix("/") { p = "/" + p }
+        return p
+    }
+
+    public func address(for command: HogCommand) -> String {
+        // Empty fields fall back to their placeholder: the Settings prefix (itself /m2h when empty) and /millumin.
+        let settingsPrefix = configuration.addressPrefix.trimmingCharacters(in: .whitespaces).isEmpty
+            ? Self.defaultPrefix : configuration.addressPrefix
+        let prefix = (command.milluminPrefix ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+            ? settingsPrefix : command.milluminPrefix!
+        let topic = (command.milluminTopic ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+            ? Self.defaultTopic : command.milluminTopic!
+        let address = Self.path(prefix) + Self.path(topic)
+        return address.isEmpty ? "/" : address
+    }
+
+    /// The value as a number (in the configured format) when it is numeric, otherwise as a string.
+    public func argument(for value: String) -> OSCArgument? {
+        let v = value.trimmingCharacters(in: .whitespaces)
+        guard !v.isEmpty else { return nil }
+        if let number = Double(v.replacingOccurrences(of: ",", with: ".")) {
+            switch configuration.numberFormat {
+            case .float: return .float(Float(number))
+            case .int: return .int(Int32(number.rounded()))
+            case .string: return .string(v)
+            }
+        }
+        return .string(v)
+    }
+
+    public func messages(for command: HogCommand) -> [OSCMessage] {
+        guard command.action.isMillumin else { return [] }
+        let address = address(for: command)
+        guard let arg = argument(for: command.milluminValue ?? "") else { return [OSCMessage(address)] }
+        var messages = [OSCMessage(address, [arg])]
+        // Key press / release: a value of 1 is followed by 0.
+        if configuration.sendKeyRelease, configuration.numberFormat != .string,
+           Double((command.milluminValue ?? "").trimmingCharacters(in: .whitespaces)) == 1 {
+            messages.append(OSCMessage(address, [configuration.numberFormat == .int ? .int(0) : .float(0)]))
+        }
+        return messages
     }
 }

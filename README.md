@@ -54,7 +54,7 @@ to the Autosave folder (*File › Show Autosave Folder*). Single-song shows auto
 
 ## Version
 
-Current version: **0.8.0**. Mac2Hog uses [Semantic Versioning](https://semver.org); see [CHANGELOG.md](CHANGELOG.md).
+Current version: **0.9.0**. Mac2Hog uses [Semantic Versioning](https://semver.org); see [CHANGELOG.md](CHANGELOG.md).
 The version is shown in *Settings › About*.
 
 ## Requirements
@@ -115,6 +115,13 @@ Downloads: [Releases](https://github.com/Frankvandetechniek/Mac2Hog/releases).
 | Run | Space = play/pause (timecode) or GO (manual), Esc = stop |
 | Save | *File › Save Show* (⌘S) – `.mac2hog` project (single song) or `.mac2hogset` (setlist) |
 | Export | Cue sheet CSV, LTC WAV, or song + LTC stereo WAV |
+
+### Millumin
+
+Cues can also control **Millumin** over OSC. Set Millumin's IP and OSC input port in *Settings › Network › Millumin*
+and the address prefix (default `/m2h`) in *Settings › OSC › Millumin Message Format*. Then add
+**+ Add › Millumin Custom OSC** to a cue and fill in Topic (default `/millumin`) and Value, e.g. `start`, which sends
+`/m2h/millumin start` to Millumin.
 
 ### Hardware
 

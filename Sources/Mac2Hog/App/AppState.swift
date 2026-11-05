@@ -59,7 +59,11 @@ final class AppState: ObservableObject {
             if settings.feedbackEnabled != oldValue.feedbackEnabled || settings.feedbackPort != oldValue.feedbackPort {
                 configureFeedback()
             }
-            if settings.networkInterface != oldValue.networkInterface { configureNetwork() }
+            if settings.networkInterface != oldValue.networkInterface { configureNetwork(); configureMillumin() }
+            if settings.milluminHost != oldValue.milluminHost || settings.milluminPort != oldValue.milluminPort
+                || settings.milluminOSC != oldValue.milluminOSC {
+                configureMillumin()
+            }
             if settings.mainAudioDeviceUID != oldValue.mainAudioDeviceUID || settings.ltcAudioDeviceUID != oldValue.ltcAudioDeviceUID
                 || settings.ltcChannel != oldValue.ltcChannel
                 || (settings.ltcAudioDeviceUID != nil && (settings.timecodeRate != oldValue.timecodeRate
@@ -153,6 +157,8 @@ final class AppState: ObservableObject {
     let oscLog = OSCLogStore()
     @Published var networkStatus = "Not configured"
     @Published var networkOK = false
+    @Published var milluminStatus = "Not configured"
+    @Published var milluminOK = false
     @Published var alertMessage: String?
     @Published var zoom: Double = 40 // pixels per second
     @Published var snapToBeat = true
@@ -176,6 +182,7 @@ final class AppState: ObservableObject {
         engine.onFire = { [weak self] event in self?.handle(event) }
         engine.onSongFinished = { [weak self] in self?.songFinished() }
         configureNetwork()
+        configureMillumin()
         configureFeedback()
         if let path = settings.selectedShowfile, FileManager.default.fileExists(atPath: path) {
             loadShowfile(URL(fileURLWithPath: path), remember: false)
@@ -210,6 +217,28 @@ final class AppState: ObservableObject {
             networkStatus = error.localizedDescription
             networkOK = false
         }
+    }
+
+    var milluminMapper: MilluminOSCMapper { MilluminOSCMapper(configuration: settings.milluminOSC) }
+
+    func configureMillumin() {
+        let host = settings.milluminHost.trimmingCharacters(in: .whitespaces)
+        do {
+            try engine.configureMillumin(host: host, port: settings.milluminPort,
+                                         interface: settings.networkInterface, mapper: milluminMapper)
+            milluminOK = !host.isEmpty
+            milluminStatus = host.isEmpty ? "Not configured" : "Sending to \(host):\(settings.milluminPort)"
+                + (settings.networkInterface.map { " via \($0)" } ?? "")
+        } catch {
+            milluminStatus = error.localizedDescription
+            milluminOK = false
+        }
+    }
+
+    /// Sends `<prefix>/test 1` to Millumin.
+    func sendMilluminTest() {
+        engine.send(commands: [HogCommand(action: .milluminCustom, label: "Millumin connection test",
+                                          milluminTopic: "/test", milluminValue: "1")])
     }
 
     func configureFeedback() {

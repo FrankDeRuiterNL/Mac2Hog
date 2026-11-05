@@ -78,6 +78,7 @@ private struct PortField: View {
 struct NetworkSettings: View {
     @EnvironmentObject var state: AppState
     @State private var host = ""
+    @State private var milluminHost = ""
 
     var body: some View {
         Form {
@@ -99,6 +100,23 @@ struct NetworkSettings: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
+                TextField("Millumin IP/Hostname", text: $milluminHost, onCommit: applyMillumin)
+                    .onAppear { milluminHost = state.settings.milluminHost }
+                PortField(title: "Millumin OSC input port", port: $state.settings.milluminPort)
+                HStack {
+                    Circle().fill(state.milluminOK ? Color.green : Color.red).frame(width: 9, height: 9)
+                    Text(state.milluminStatus).font(.caption)
+                    Spacer()
+                    Button("Apply") { applyMillumin(); state.configureMillumin() }
+                    Button("Send test message") { applyMillumin(); state.sendMilluminTest() }
+                }
+            } header: {
+                Text("Millumin")
+            } footer: {
+                Text("In Millumin enable OSC input (Device Manager › OSC) on this port. \"Millumin Custom OSC\" commands in a cue are sent here, e.g. /m2h/millumin start. The test message sends \(state.milluminMapper.address(for: HogCommand(action: .milluminCustom, milluminTopic: "/test"))) 1.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
                 Toggle("Listen for Hog OSC output (status feedback)", isOn: $state.settings.feedbackEnabled)
                 PortField(title: "Feedback port on this Mac", port: $state.settings.feedbackPort)
                     .disabled(!state.settings.feedbackEnabled)
@@ -111,6 +129,10 @@ struct NetworkSettings: View {
         }
         .formStyle(.grouped)
     }
+
+    private func applyMillumin() {
+        state.settings.milluminHost = milluminHost.trimmingCharacters(in: .whitespaces)
+    }
 }
 
 struct OSCSettings: View {
@@ -120,15 +142,28 @@ struct OSCSettings: View {
 
     var body: some View {
         Form {
-            Section("Message format") {
-                TextField("Address prefix", text: $state.settings.osc.addressPrefix)
-                Picker("Number arguments", selection: $state.settings.osc.numberFormat) {
+            Section("Hog Message Format") {
+                TextField("Hog address prefix", text: $state.settings.osc.addressPrefix)
+                Picker("Hog number arguments", selection: $state.settings.osc.numberFormat) {
                     ForEach(OSCNumberFormat.allCases) { Text($0.displayName).tag($0) }
                 }
-                Picker("Goto cue format", selection: $state.settings.osc.gotoStyle) {
+                Picker("Hog goto cue format", selection: $state.settings.osc.gotoStyle) {
                     ForEach(GotoStyle.allCases) { Text($0.displayName).tag($0) }
                 }
                 Toggle("Send key release (0) after key press (1)", isOn: $state.settings.osc.sendKeyRelease)
+            }
+            Section {
+                TextField("Millumin address prefix", text: $state.settings.milluminOSC.addressPrefix,
+                          prompt: Text(MilluminOSCMapper.defaultPrefix))
+                Picker("Millumin number arguments", selection: $state.settings.milluminOSC.numberFormat) {
+                    ForEach(OSCNumberFormat.allCases) { Text($0.displayName).tag($0) }
+                }
+                Toggle("Send key release (0) after key press (1)", isOn: $state.settings.milluminOSC.sendKeyRelease)
+            } header: {
+                Text("Millumin Message Format")
+            } footer: {
+                Text("Millumin Custom OSC commands send <prefix><topic> <value>, e.g. \(MilluminOSCMapper.defaultPrefix)\(MilluminOSCMapper.defaultTopic) start. Numeric values use the number format; with key release on, a value of 1 is followed by 0.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section {
                 HStack {
@@ -150,7 +185,7 @@ struct OSCSettings: View {
                     }
                 }
             } header: {
-                Text("Goto cue test")
+                Text("Hog Goto Cue Test")
             } footer: {
                 Text("Send each variant and watch the cuelist on the Hog; click Use on the one that jumps to the right cue. Tip: enable feedback (Settings › Network) and press a cue on the console to see in the OSC log exactly how the Hog itself formats it.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -166,7 +201,7 @@ struct OSCSettings: View {
             Section("Hog OSC reference") {
                 VStack(alignment: .leading, spacing: 3) {
                     ref("Go cuelist", "/hog/playback/go/0  <list>")
-                    ref("Goto cue", "/hog/playback/go/0  \"<list>.<cue>\"  (see Goto cue format)")
+                    ref("Goto cue", "/hog/playback/go/0  \"<list>.<cue>\"  (see Hog goto cue format)")
                     ref("Halt / resume / release", "/hog/playback/halt|resume|release/0  <list>")
                     ref("Scene go / halt / release", "/hog/playback/go|halt|release/1  <scene>")
                     ref("Macro go", "/hog/playback/go/2  <macro>")
@@ -507,6 +542,7 @@ struct PredefinedEditor: View {
                         Button("Main Go") { predefined.commands.append(HogCommand(action: .mainGo)) }
                         Divider()
                         Button("Custom OSC") { predefined.commands.append(HogCommand(action: .custom)) }
+                        Button("Millumin Custom OSC") { predefined.commands.append(HogCommand(action: .milluminCustom)) }
                     } label: { Label("Add", systemImage: "plus") }
                     .menuStyle(.borderlessButton)
                     .fixedSize()

@@ -21,6 +21,8 @@ final class ShowEngine: @unchecked Sendable {
     private var runner = ShowRunner(triggers: [])
     private var sender: OSCSender?
     private var mapper = HogOSCMapper()
+    private var milluminSender: OSCSender?
+    private var milluminMapper = MilluminOSCMapper()
     private var autoFire = true
     private var scheduled: [DispatchWorkItem] = []
     private let playerDelegate = PlayerDelegate()
@@ -51,6 +53,16 @@ final class ShowEngine: @unchecked Sendable {
             self.sender = newSender
             self.mapper = mapper
             self.runner.latencyCompensation = latency
+        }
+    }
+
+    /// Millumin destination for "Millumin Custom OSC" commands; an empty host disables it.
+    func configureMillumin(host: String, port: UInt16, interface: String?, mapper: MilluminOSCMapper) throws {
+        let trimmed = host.trimmingCharacters(in: .whitespaces)
+        let newSender = trimmed.isEmpty ? nil : try OSCSender(host: trimmed, port: port, interface: interface)
+        queue.sync {
+            self.milluminSender = newSender
+            self.milluminMapper = mapper
         }
     }
 
@@ -204,17 +216,21 @@ final class ShowEngine: @unchecked Sendable {
         return FireEvent(trigger: trigger, messages: messages, error: error, songTime: time)
     }
 
+    /// Hog commands go to the console, Millumin commands to Millumin.
     private func transmit(_ commands: [HogCommand]) -> ([OSCMessage], String?) {
-        let messages = commands.flatMap { mapper.messages(for: $0) }
+        let hog = commands.filter { !$0.action.isMillumin }.flatMap { mapper.messages(for: $0) }
+        let millumin = commands.filter(\.action.isMillumin).flatMap { milluminMapper.messages(for: $0) }
         var error: String?
-        if let s = sender {
+        func deliver(_ messages: [OSCMessage], via sender: OSCSender?, missing: String) {
+            guard !messages.isEmpty else { return }
+            guard let sender else { error = missing; return }
             for m in messages {
-                do { try s.send(m) } catch let e { error = e.localizedDescription }
+                do { try sender.send(m) } catch let e { error = e.localizedDescription }
             }
-        } else if !messages.isEmpty {
-            error = "Console address not configured"
         }
-        return (messages, error)
+        deliver(hog, via: sender, missing: "Console address not configured")
+        deliver(millumin, via: milluminSender, missing: "Millumin address not configured")
+        return (hog + millumin, error)
     }
 
     private final class PlayerDelegate: NSObject, AVAudioPlayerDelegate {

@@ -10,6 +10,8 @@ public enum HogAction: String, Codable, CaseIterable, Sendable, Identifiable {
     case mainGo, mainHalt, mainBack
     // Arbitrary OSC
     case custom
+    // Arbitrary OSC to Millumin (Settings › Network › Millumin)
+    case milluminCustom
 
     public var id: String { rawValue }
 
@@ -28,11 +30,15 @@ public enum HogAction: String, Codable, CaseIterable, Sendable, Identifiable {
         case .mainHalt: return "Main Halt"
         case .mainBack: return "Main Back"
         case .custom: return "Custom OSC"
+        case .milluminCustom: return "Millumin Custom OSC"
         }
     }
 
     /// Whether the action addresses a cuelist/scene/macro object.
     public var usesObject: Bool { [.go, .gotoCue, .halt, .resume, .release].contains(self) }
+    /// Sent to Millumin instead of the Hog.
+    public var isMillumin: Bool { self == .milluminCustom }
+
     public var usesMaster: Bool { [.masterGo, .masterPause, .masterBack, .masterFader].contains(self) }
 
     /// Actions valid for an object kind (scenes/macros cannot resume or goto cues).
@@ -84,11 +90,17 @@ public struct HogCommand: Codable, Hashable, Sendable, Identifiable {
     public var label: String
     /// nil = sent the moment the cue fires; otherwise delayed (Follow / Wait).
     public var timing: CommandTiming?
+    /// Millumin Custom OSC: prefix (empty/nil = the prefix from Settings), topic (empty/nil = "/millumin")
+    /// and value ("start", "1", "0.5" or empty). Optional so older show files still decode.
+    public var milluminPrefix: String?
+    public var milluminTopic: String?
+    public var milluminValue: String?
 
     public init(id: UUID = UUID(), action: HogAction = .go, objectKind: HogObjectKind = .cuelist,
                 objectNumber: String = "1", cueNumber: String = "1", master: Int = 1, level: Double = 100,
                 customAddress: String = "/hog/hardware/maingo", customArguments: String = "", label: String = "",
-                timing: CommandTiming? = nil) {
+                timing: CommandTiming? = nil,
+                milluminPrefix: String? = nil, milluminTopic: String? = nil, milluminValue: String? = nil) {
         self.id = id
         self.action = action
         self.objectKind = objectKind
@@ -100,6 +112,9 @@ public struct HogCommand: Codable, Hashable, Sendable, Identifiable {
         self.customArguments = customArguments
         self.label = label
         self.timing = timing
+        self.milluminPrefix = milluminPrefix
+        self.milluminTopic = milluminTopic
+        self.milluminValue = milluminValue
     }
 
     public static func go(_ kind: HogObjectKind, _ number: String, label: String = "") -> HogCommand {
@@ -137,6 +152,9 @@ public struct HogCommand: Codable, Hashable, Sendable, Identifiable {
             return true
         case .custom:
             return customAddress == other.customAddress && customArguments == other.customArguments
+        case .milluminCustom:
+            return (milluminPrefix ?? "") == (other.milluminPrefix ?? "") && (milluminTopic ?? "") == (other.milluminTopic ?? "")
+                && (milluminValue ?? "") == (other.milluminValue ?? "")
         }
     }
 
@@ -155,6 +173,10 @@ public struct HogCommand: Codable, Hashable, Sendable, Identifiable {
             return action.displayName
         case .custom:
             return customArguments.isEmpty ? customAddress : "\(customAddress) \(customArguments)"
+        case .milluminCustom:
+            let topic = (milluminTopic ?? "").isEmpty ? MilluminOSCMapper.defaultTopic : milluminTopic!
+            let value = milluminValue ?? ""
+            return "Millumin \(milluminPrefix ?? "")\(topic)" + (value.isEmpty ? "" : " \(value)")
         }
     }
 }
