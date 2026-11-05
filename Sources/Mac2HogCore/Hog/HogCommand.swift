@@ -44,6 +44,25 @@ public enum HogAction: String, Codable, CaseIterable, Sendable, Identifiable {
     }
 }
 
+/// Optional delay for one command of a cue, e.g. a Release that follows the cue's Go.
+public struct CommandTiming: Codable, Hashable, Sendable {
+    /// `.follow`: `seconds` after the cue fired. `.wait`: `seconds` after the cue finished (fire + cue duration).
+    public var mode: CueStartMode
+    public var seconds: Double
+
+    public init(mode: CueStartMode = .follow, seconds: Double = 5) {
+        self.mode = mode == .timecode ? .follow : mode
+        self.seconds = seconds
+    }
+
+    /// Seconds after the cue fires at which this command is sent.
+    public func delay(cueDuration: Double) -> Double {
+        max(0, mode == .wait ? cueDuration + seconds : seconds)
+    }
+
+    public var description: String { "\(mode == .wait ? "Wait" : "Follow") +\(SecondsText.format(seconds))s" }
+}
+
 /// A single console command attached to a trigger. Converted into one or more OSC messages
 /// by `HogOSCMapper` using the current OSC settings.
 public struct HogCommand: Codable, Hashable, Sendable, Identifiable {
@@ -63,10 +82,13 @@ public struct HogCommand: Codable, Hashable, Sendable, Identifiable {
     public var customArguments: String
     /// Optional label shown in the UI (e.g. the cuelist name from the showfile).
     public var label: String
+    /// nil = sent the moment the cue fires; otherwise delayed (Follow / Wait).
+    public var timing: CommandTiming?
 
     public init(id: UUID = UUID(), action: HogAction = .go, objectKind: HogObjectKind = .cuelist,
                 objectNumber: String = "1", cueNumber: String = "1", master: Int = 1, level: Double = 100,
-                customAddress: String = "/hog/hardware/maingo", customArguments: String = "", label: String = "") {
+                customAddress: String = "/hog/hardware/maingo", customArguments: String = "", label: String = "",
+                timing: CommandTiming? = nil) {
         self.id = id
         self.action = action
         self.objectKind = objectKind
@@ -77,6 +99,7 @@ public struct HogCommand: Codable, Hashable, Sendable, Identifiable {
         self.customAddress = customAddress
         self.customArguments = customArguments
         self.label = label
+        self.timing = timing
     }
 
     public static func go(_ kind: HogObjectKind, _ number: String, label: String = "") -> HogCommand {
@@ -84,6 +107,40 @@ public struct HogCommand: Codable, Hashable, Sendable, Identifiable {
     }
 
     public var summary: String {
+        timing.map { "\(baseSummary) (\($0.description))" } ?? baseSummary
+    }
+
+    /// Whether this is a Go of a cuelist or scene, which can get a matching Release.
+    public var canAddRelease: Bool {
+        (action == .go || action == .gotoCue) && (objectKind == .cuelist || objectKind == .scene)
+            && !objectNumber.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// The inverse of a Go: a Release of the same cuelist / scene, by default 5 s after the cue fired.
+    public func releaseCommand(timing: CommandTiming = CommandTiming()) -> HogCommand {
+        HogCommand(action: .release, objectKind: objectKind, objectNumber: objectNumber, label: label, timing: timing)
+    }
+
+    /// Same console effect (ignores id, label and timing) — used to find matching predefined triggers.
+    public func isEquivalent(to other: HogCommand) -> Bool {
+        guard action == other.action else { return false }
+        switch action {
+        case .go, .halt, .resume, .release:
+            return objectKind == other.objectKind && objectNumber == other.objectNumber
+        case .gotoCue:
+            return objectKind == other.objectKind && objectNumber == other.objectNumber && cueNumber == other.cueNumber
+        case .masterGo, .masterPause, .masterBack:
+            return master == other.master
+        case .masterFader:
+            return master == other.master && level == other.level
+        case .mainGo, .mainHalt, .mainBack:
+            return true
+        case .custom:
+            return customAddress == other.customAddress && customArguments == other.customArguments
+        }
+    }
+
+    private var baseSummary: String {
         switch action {
         case .go, .halt, .resume, .release:
             let name = label.isEmpty ? "" : " (\(label))"

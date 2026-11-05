@@ -24,6 +24,21 @@ struct InspectorView: View {
     }
 }
 
+/// Label column used by every grid in the inspector so all sections line up.
+struct InspectorLabel: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .fixedSize()
+            .frame(minWidth: 72, alignment: .trailing)
+            .gridColumnAlignment(.trailing)
+    }
+}
+
 struct TriggerEditor: View {
     @EnvironmentObject var state: AppState
     @Binding var trigger: ShowTrigger
@@ -31,50 +46,100 @@ struct TriggerEditor: View {
 
     var body: some View {
         Form {
-            Section("Cue") {
-                TextField("Name", text: $trigger.name)
-                Picker("Start", selection: $trigger.startMode) {
-                    ForEach(CueStartMode.allCases) { Text($0.displayName).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                if trigger.startMode != .timecode {
-                    HStack {
-                        Text(trigger.startMode == .follow ? "Follow previous cue's start +" : "Wait for previous cue's end +")
-                        SecondsField(value: $trigger.delay)
-                        Text("s")
+            Section {
+                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 10) {
+                    GridRow {
+                        InspectorLabel("Name")
+                        TextField("", text: $trigger.name, prompt: Text("Cue name"))
+                            .labelsHidden()
+                            .textFieldStyle(.roundedBorder)
                     }
-                    Text(startExplanation).font(.caption).foregroundStyle(.secondary)
-                }
-                HStack {
-                    Text("Duration")
-                    SecondsField(value: $trigger.duration)
-                    Text("s")
-                    Spacer()
-                    Text("how long this cue runs (fade time); a next Wait cue starts after it")
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                }
-                HStack {
-                    TextField("Timecode", text: $timecodeText, onCommit: commitTimecode)
-                        .font(.body.monospacedDigit())
-                        .frame(width: 120)
-                        .disabled(trigger.startMode != .timecode)
-                    Text(String(format: "%.3f s", trigger.time)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                    Spacer()
-                    if trigger.startMode == .timecode {
-                        Button { nudge(-1) } label: { Image(systemName: "chevron.left") }.help("One beat earlier")
-                        Button { nudge(1) } label: { Image(systemName: "chevron.right") }.help("One beat later")
-                        if state.editingState == nil {
-                            Button("Playhead") { trigger.time = state.currentTime }.help("Move this cue to the playhead")
+                    GridRow {
+                        InspectorLabel("Start")
+                        HStack(spacing: 6) {
+                            Picker("Start", selection: $trigger.startMode) {
+                                ForEach(CueStartMode.allCases) { Text($0.displayName).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .fixedSize()
+                            if trigger.startMode != .timecode {
+                                Text("+")
+                                SecondsField(value: $trigger.delay, width: 56)
+                                Text("s")
+                            }
+                            Spacer(minLength: 0)
                         }
                     }
+                    if trigger.startMode != .timecode {
+                        GridRow {
+                            Color.clear.frame(width: 1, height: 1)
+                            Text(startExplanation).font(.caption).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    GridRow {
+                        InspectorLabel("Duration")
+                        HStack(spacing: 6) {
+                            SecondsField(value: $trigger.duration, width: 56)
+                            Text("s")
+                            Spacer(minLength: 0)
+                        }
+                        .help("How long this cue runs (e.g. its fade time). A following Wait cue or command starts after it.")
+                    }
+                    GridRow {
+                        InspectorLabel("Timecode")
+                        HStack(spacing: 6) {
+                            TextField("", text: $timecodeText, prompt: Text("hh:mm:ss:ff"))
+                                .labelsHidden()
+                                .textFieldStyle(.roundedBorder)
+                                .font(.body.monospacedDigit())
+                                .frame(width: 118)
+                                .onSubmit(commitTimecode)
+                                .disabled(trigger.startMode != .timecode)
+                            Text(String(format: "%.3f s", trigger.time))
+                                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                                .fixedSize()
+                            Spacer(minLength: 4)
+                            if trigger.startMode == .timecode {
+                                Button { nudge(-1) } label: { Image(systemName: "chevron.left") }.help("One beat earlier")
+                                Button { nudge(1) } label: { Image(systemName: "chevron.right") }.help("One beat later")
+                                if state.editingState == nil {
+                                    Button("Playhead") { trigger.time = state.currentTime }.help("Move this cue to the playhead")
+                                }
+                            }
+                        }
+                        .controlSize(.small)
+                    }
+                    GridRow {
+                        InspectorLabel("Enabled")
+                        HStack {
+                            Toggle("", isOn: $trigger.enabled).labelsHidden().toggleStyle(.switch).controlSize(.small)
+                            Spacer()
+                            Text(trigger.source.displayName).font(.caption).foregroundStyle(.secondary)
+                                .help("Where this cue came from")
+                        }
+                    }
+                    GridRow {
+                        InspectorLabel("Notes")
+                        TextField("", text: $trigger.notes, prompt: Text("Notes"), axis: .vertical)
+                            .labelsHidden()
+                            .textFieldStyle(.roundedBorder)
+                            .lineLimit(1...3)
+                    }
                 }
-                .controlSize(.small)
+                .padding(.vertical, 2)
+            } header: {
                 HStack {
-                    Toggle("Enabled", isOn: $trigger.enabled)
+                    Text("Cue")
                     Spacer()
-                    Text(trigger.source.displayName).foregroundStyle(.secondary)
+                    Button(role: .destructive) { state.deleteTriggers([trigger.id]) } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.red)
+                    .help("Delete this cue")
                 }
-                TextField("Notes", text: $trigger.notes, axis: .vertical).lineLimit(1...3)
             }
 
             Section {
@@ -82,11 +147,22 @@ struct TriggerEditor: View {
                     Text("No commands yet — this cue won't change anything on the console.").foregroundStyle(.secondary)
                 }
                 ForEach($trigger.commands) { $command in
-                    CommandEditor(command: $command, show: state.project.show, mapper: state.mapper) {
-                        let id = command.id
-                        // Defer so the ForEach binding isn't mutated while it is being rendered.
-                        DispatchQueue.main.async { trigger.commands.removeAll { $0.id == id } }
-                    }
+                    CommandEditor(
+                        command: $command, show: state.project.show, mapper: state.mapper,
+                        onDelete: {
+                            let id = command.id
+                            // Defer so the ForEach binding isn't mutated while it is being rendered.
+                            DispatchQueue.main.async { trigger.commands.removeAll { $0.id == id } }
+                        },
+                        onAddRelease: command.canAddRelease && command.timing == nil ? {
+                            let source = command
+                            DispatchQueue.main.async {
+                                let i = trigger.commands.firstIndex { $0.id == source.id } ?? trigger.commands.count - 1
+                                trigger.commands.insert(source.releaseCommand(), at: i + 1)
+                            }
+                        } : nil,
+                        isPredefined: state.isPredefined(command),
+                        onTogglePredefined: { state.togglePredefined(command) })
                 }
             } header: {
                 HStack {
@@ -122,25 +198,6 @@ struct TriggerEditor: View {
                     .menuStyle(.borderlessButton)
                     .fixedSize()
                 }
-            }
-
-            Section {
-                HStack {
-                    Button { state.fire(trigger) } label: { Label("Fire now", systemImage: "bolt.fill") }
-                    Button { state.seek(to: max(0, trigger.time - 2)) } label: { Label("Preview", systemImage: "play") }
-                        .help("Jump 2 seconds before this cue")
-                    Spacer()
-                    if !trigger.commands.isEmpty {
-                        Button("Copy to all \(trigger.source.displayName) cues") { state.applyCommandsToAll(from: trigger.id) }
-                    }
-                }
-                .controlSize(.small)
-                if !trigger.commands.isEmpty {
-                    Button { state.saveAsPredefined(trigger) } label: { Label("Save commands as predefined trigger", systemImage: "star") }
-                        .controlSize(.small)
-                }
-                Button("Delete cue", role: .destructive) { state.deleteTriggers([trigger.id]) }
-                    .controlSize(.small)
             }
         }
         .formStyle(.grouped)
@@ -191,6 +248,11 @@ struct CommandEditor: View {
     let show: HogShow?
     let mapper: HogOSCMapper
     let onDelete: () -> Void
+    /// Shown as a blue ↩︎ button for a Go of a cuelist / scene: adds the matching Release below.
+    var onAddRelease: (() -> Void)? = nil
+    /// nil hides the star; otherwise filled yellow when the command is a predefined trigger.
+    var isPredefined: Bool? = nil
+    var onTogglePredefined: (() -> Void)? = nil
 
     private var actions: [HogAction] {
         HogAction.allCases
@@ -217,6 +279,19 @@ struct CommandEditor: View {
                             .fixedSize()
                         }
                         Spacer(minLength: 0)
+                        if let onAddRelease {
+                            Button(action: onAddRelease) { Image(systemName: "arrow.uturn.backward.circle.fill") }
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(.blue)
+                                .help("Add a Release of this \(command.objectKind.displayName.lowercased()) below, with Follow / Wait timing")
+                        }
+                        if let isPredefined, let onTogglePredefined {
+                            Button(action: onTogglePredefined) { Image(systemName: isPredefined ? "star.fill" : "star") }
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(isPredefined ? Color.yellow : Color.secondary)
+                                .help(isPredefined ? "This command is a predefined trigger (click to remove it from Predefined)"
+                                                   : "Save this command as a predefined trigger")
+                        }
                         Button(role: .destructive, action: onDelete) { Image(systemName: "minus.circle.fill") }
                             .buttonStyle(.borderless)
                             .foregroundStyle(.red)
@@ -254,6 +329,33 @@ struct CommandEditor: View {
                         }
                     }
                 }
+                if command.timing != nil {
+                    GridRow {
+                        label("Timing")
+                        HStack(spacing: 6) {
+                            Picker("Timing", selection: Binding(get: { command.timing?.mode ?? .follow },
+                                                                set: { command.timing?.mode = $0 })) {
+                                Text("Follow").tag(CueStartMode.follow)
+                                Text("Wait").tag(CueStartMode.wait)
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .fixedSize()
+                            Text("+")
+                            SecondsField(value: Binding(get: { command.timing?.seconds ?? 0 },
+                                                        set: { command.timing?.seconds = $0 }), width: 56)
+                            Text("s")
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    GridRow {
+                        Color.clear.frame(width: 1, height: 1)
+                        Text(command.timing?.mode == .wait
+                             ? "Sent \(SecondsText.format(command.timing?.seconds ?? 0)) s after this cue has finished (fire + Duration)."
+                             : "Sent \(SecondsText.format(command.timing?.seconds ?? 0)) s after this cue fires.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 if command.action == .custom {
                     GridRow {
                         label("Address")
@@ -283,13 +385,7 @@ struct CommandEditor: View {
         .padding(.vertical, 4)
     }
 
-    private func label(_ text: String) -> some View {
-        Text(text)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .fixedSize()
-            .gridColumnAlignment(.trailing)
-    }
+    private func label(_ text: String) -> some View { InspectorLabel(text) }
 
     private func numberField(_ prompt: String, value: Binding<Int>) -> some View {
         TextField("", value: value, format: .number.grouping(.never), prompt: Text(prompt))

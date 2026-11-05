@@ -112,3 +112,33 @@ final class HogNumberTests: XCTestCase {
         XCTAssertEqual(HogNumber.step("5", by: 1, existing: cues), "10")
     }
 }
+
+final class CommandTimingTests: XCTestCase {
+    func testReleaseCommandAndTiming() {
+        let go = HogCommand(action: .gotoCue, objectKind: .cuelist, objectNumber: "3", cueNumber: "2", label: "Wash")
+        XCTAssertTrue(go.canAddRelease)
+        XCTAssertFalse(HogCommand(action: .go, objectKind: .macro, objectNumber: "1").canAddRelease)
+        let rel = go.releaseCommand(timing: CommandTiming(mode: .wait, seconds: 1.5))
+        XCTAssertEqual(rel.action, .release)
+        XCTAssertEqual(rel.objectNumber, "3")
+        XCTAssertEqual(rel.timing?.delay(cueDuration: 4), 5.5)
+        XCTAssertEqual(CommandTiming(mode: .follow, seconds: 2).delay(cueDuration: 4), 2)
+        XCTAssertEqual(HogOSCMapper().messages(for: rel), [OSCMessage("/hog/playback/release/0", [.float(3)])])
+    }
+
+    func testEquivalenceIgnoresIdLabelTiming() {
+        let a = HogCommand.go(.scene, "11", label: "Full")
+        var b = HogCommand.go(.scene, "11")
+        b.timing = CommandTiming()
+        XCTAssertTrue(a.isEquivalent(to: b))
+        XCTAssertFalse(a.isEquivalent(to: .go(.scene, "12")))
+    }
+
+    func testOldCommandJSONDecodesWithoutTiming() throws {
+        let data = try JSONEncoder().encode(HogCommand.go(.cuelist, "1"))
+        var json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        json.removeValue(forKey: "timing")
+        let decoded = try JSONDecoder().decode(HogCommand.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertNil(decoded.timing)
+    }
+}

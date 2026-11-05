@@ -3,6 +3,18 @@
 Mac2Hog follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The version lives in `VERSION`,
 `Sources/Mac2HogCore/Version.swift` and `Resources/Info.plist` (kept in sync by a unit test) and is bumped on every commit.
 
+## 0.5.0
+- Release button (blue ↩︎) on a Go of a cuelist or scene: adds the matching Release below it, with its own
+  Follow / Wait timing (Follow = seconds after the cue fires, Wait = after the cue's Duration). Commands with a
+  timing are sent by the engine after that delay and cancelled by STOP.
+- Star button per command: outline = not predefined, yellow = already a predefined trigger (click to add/remove).
+- Cue inspector redesigned: aligned label/control grid (labels never truncate), delete-cue trash icon in the
+  header; removed Fire now, Preview, Copy to all, Save as predefined and Delete cue buttons.
+- Next cue blinks dark green (once per second) in the cue list.
+- Two-finger horizontal scrolling (and mouse wheel) over the waveform.
+- Fix: the playhead is now a Core Animation layer moving at playback speed on the render server, so it stays
+  smooth when a cue fires; it is only re-synced to the player when it drifts or the view scrolls/zooms.
+
 ## 0.4.0
 - Pinch-to-zoom on the waveform (trackpad); zooms around the playhead when visible, otherwise the centre.
 - Fix: Follow / Wait delay, cue Duration and setlist pause fields accept decimals with a dot or a comma

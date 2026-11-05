@@ -11,6 +11,8 @@ final class ShowEngine: @unchecked Sendable {
         var messages: [OSCMessage]
         var error: String?
         var songTime: Double
+        /// Log title for delayed commands (e.g. "Cue 3 · Release Cuelist 1 (Follow +5s)").
+        var label: String?
     }
 
     private let queue = DispatchQueue(label: "mac2hog.engine", qos: .userInteractive)
@@ -156,8 +158,29 @@ final class ShowEngine: @unchecked Sendable {
         }
     }
 
+    /// Sends a cue's immediate commands now and schedules its delayed (Follow / Wait) commands.
+    /// Must run on `queue`.
     private func send(trigger: ShowTrigger, at time: Double) -> FireEvent {
-        let messages = trigger.commands.flatMap { mapper.messages(for: $0) }
+        let now = trigger.commands.filter { $0.timing == nil }
+        for command in trigger.commands {
+            guard let timing = command.timing else { continue }
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                let (messages, error) = self.transmit([command])
+                let event = FireEvent(trigger: nil, messages: messages, error: error,
+                                      songTime: self.player?.currentTime ?? 0,
+                                      label: "\(trigger.name) · \(command.summary)")
+                DispatchQueue.main.async { self.onFire?(event) }
+            }
+            scheduled.append(work)
+            queue.asyncAfter(deadline: .now() + timing.delay(cueDuration: trigger.duration), execute: work)
+        }
+        let (messages, error) = transmit(now)
+        return FireEvent(trigger: trigger, messages: messages, error: error, songTime: time)
+    }
+
+    private func transmit(_ commands: [HogCommand]) -> ([OSCMessage], String?) {
+        let messages = commands.flatMap { mapper.messages(for: $0) }
         var error: String?
         if let s = sender {
             for m in messages {
@@ -166,7 +189,7 @@ final class ShowEngine: @unchecked Sendable {
         } else if !messages.isEmpty {
             error = "Console address not configured"
         }
-        return FireEvent(trigger: trigger, messages: messages, error: error, songTime: time)
+        return (messages, error)
     }
 
     private final class PlayerDelegate: NSObject, AVAudioPlayerDelegate {

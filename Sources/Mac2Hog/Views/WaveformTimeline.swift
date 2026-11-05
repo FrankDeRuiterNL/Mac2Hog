@@ -34,6 +34,7 @@ struct WaveformTimeline: View {
                         state.addTrigger(at: time(atX: v.location.x))
                     })
                     .simultaneousGesture(pinchGesture(width: width))
+                    .background(ScrollWheelCatcher { dx, dy, precise in scroll(dx: dx, dy: dy, precise: precise, width: width) })
                     // The playhead is a separate light layer: only it redraws while the song plays.
                     .overlay(PlayheadLayer(viewStart: $viewStart, zoom: state.zoom, visible: visible,
                                            follow: state.followPlayhead).clipped())
@@ -60,7 +61,7 @@ struct WaveformTimeline: View {
             legend(color: .orange, "Snare")
             legend(color: .red.opacity(0.5), "Break")
             legend(color: .accentColor, "Trigger")
-            Text("Double-click to add a trigger · drag flags to move · pinch to zoom")
+            Text("Double-click to add a trigger · drag flags to move · pinch to zoom · swipe to scroll")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .toggleStyle(.checkbox)
@@ -104,6 +105,16 @@ struct WaveformTimeline: View {
                 viewStart = min(maxStart, max(0, start.anchorTime - Double(start.anchorX) / newZoom))
             }
             .onEnded { _ in pinchStart = nil }
+    }
+
+    /// Horizontal two-finger swipe pans the waveform; a (non-trackpad) mouse wheel pans too.
+    private func scroll(dx: CGFloat, dy: CGFloat, precise: Bool, width: CGFloat) {
+        let delta = abs(dx) >= abs(dy) ? dx : (precise ? 0 : dy)
+        guard delta != 0 else { return }
+        let points = Double(delta) * (precise ? 1 : 12)
+        let maxStart = max(0, state.duration - Double(width) / state.zoom)
+        viewStart = min(maxStart, max(0, viewStart - points / state.zoom))
+        if state.followPlayhead && state.isPlaying { state.followPlayhead = false }
     }
 
     private func dragGesture(width: CGFloat) -> some Gesture {
@@ -246,23 +257,130 @@ private struct PlayheadLayer: View {
     let follow: Bool
 
     var body: some View {
-        // Redrawn at display rate and extrapolated from the last player position, so the line glides
-        // smoothly even if a position update arrives a little late.
-        TimelineView(.animation(minimumInterval: nil, paused: !playback.isPlaying)) { context in
-            GeometryReader { _ in
-                Rectangle()
-                    .fill(Color.red)
-                    .frame(width: 2)
-                    .offset(x: CGFloat((playback.time(at: context.date) - viewStart) * zoom) - 1)
+        PlayheadCALayer(time: playback.currentTime, playing: playback.isPlaying, viewStart: viewStart, zoom: zoom)
+            .allowsHitTesting(false)
+            .onChange(of: playback.currentTime) { t in
+                guard follow, playback.isPlaying else { return }
+                if t < viewStart || t > viewStart + visible * 0.85 {
+                    viewStart = max(0, t - visible * 0.15)
+                }
+            }
+    }
+}
+
+/// The playhead line is a Core Animation layer that moves linearly at playback speed on the render
+/// server. It keeps gliding even while the main thread is busy (e.g. when a cue fires and the cue list and
+/// inspector update) and is only re-synced to the player when it drifts or the view scrolls / zooms.
+private struct PlayheadCALayer: NSViewRepresentable {
+    let time: Double
+    let playing: Bool
+    let viewStart: Double
+    let zoom: Double
+
+    func makeNSView(context: Context) -> PlayheadNSView { PlayheadNSView() }
+
+    func updateNSView(_ view: PlayheadNSView, context: Context) {
+        view.sync(time: time, playing: playing, viewStart: viewStart, zoom: zoom)
+    }
+}
+
+final class PlayheadNSView: NSView {
+    private let line = CALayer()
+    private var animating = false
+    private var lastViewStart = -1.0
+    private var lastZoom = -1.0
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        line.backgroundColor = NSColor.systemRed.cgColor
+        line.actions = ["position": NSNull(), "bounds": NSNull()]
+        layer?.addSublayer(line)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        line.bounds = CGRect(x: 0, y: 0, width: 2, height: bounds.height)
+        line.position.y = bounds.midY
+        CATransaction.commit()
+    }
+
+    func sync(time: Double, playing: Bool, viewStart: Double, zoom: Double) {
+        let x = CGFloat((time - viewStart) * zoom)
+        let viewChanged = viewStart != lastViewStart || zoom != lastZoom
+        lastViewStart = viewStart
+        lastZoom = zoom
+        if playing {
+            if animating, !viewChanged, let shown = line.presentation()?.position.x {
+                // Still on track (within ~40 ms of the player): leave the running animation alone.
+                if abs(shown - x) <= max(2, CGFloat(zoom * 0.04)) { return }
+            }
+            let span: CFTimeInterval = 60
+            let anim = CABasicAnimation(keyPath: "position.x")
+            anim.fromValue = x
+            anim.toValue = x + CGFloat(zoom * span)
+            anim.duration = span
+            anim.timingFunction = CAMediaTimingFunction(name: .linear)
+            anim.isRemovedOnCompletion = false
+            anim.fillMode = .forwards
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            line.removeAllAnimations()
+            line.position.x = x
+            line.add(anim, forKey: "playhead")
+            CATransaction.commit()
+            animating = true
+        } else {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            line.removeAllAnimations()
+            line.position.x = x
+            CATransaction.commit()
+            animating = false
+        }
+    }
+}
+
+/// Two-finger trackpad swipes (and the mouse wheel) over the waveform scroll it horizontally.
+private struct ScrollWheelCatcher: NSViewRepresentable {
+    let onScroll: (_ dx: CGFloat, _ dy: CGFloat, _ precise: Bool) -> Void
+
+    func makeNSView(context: Context) -> MonitorView {
+        let view = MonitorView()
+        view.onScroll = onScroll
+        return view
+    }
+
+    func updateNSView(_ view: MonitorView, context: Context) { view.onScroll = onScroll }
+
+    final class MonitorView: NSView {
+        var onScroll: ((CGFloat, CGFloat, Bool) -> Void)?
+        private var monitor: Any?
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+            guard window != nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                guard let self, event.window === self.window else { return event }
+                let p = self.convert(event.locationInWindow, from: nil)
+                guard self.bounds.contains(p) else { return event }
+                self.onScroll?(event.scrollingDeltaX, event.scrollingDeltaY, event.hasPreciseScrollingDeltas)
+                return nil
             }
         }
-        .allowsHitTesting(false)
-        .onChange(of: playback.currentTime) { t in
-            guard follow, playback.isPlaying else { return }
-            if t < viewStart || t > viewStart + visible * 0.85 {
-                viewStart = max(0, t - visible * 0.15)
-            }
-        }
+
+        deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
     }
 }
 

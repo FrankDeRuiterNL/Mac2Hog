@@ -236,7 +236,8 @@ final class AppState: ObservableObject {
             // Follow: the inspector shows the cue that just fired (without touching the list selection).
             if followPlayhead, activity.focusedCueID != t.id { activity.focusedCueID = t.id }
         }
-        let title = event.trigger.map { "\(project.timecode(at: event.songTime))  \($0.name)" } ?? "OSC"
+        let title = event.trigger.map { "\(project.timecode(at: event.songTime))  \($0.name)" }
+            ?? event.label.map { "\(project.timecode(at: event.songTime))  \($0)" } ?? "OSC"
         let detail = event.messages.isEmpty ? "(no commands)" : event.messages.map(\.description).joined(separator: "   ")
         appendLog(OSCLogEntry(songTime: event.songTime, title: title, detail: event.error.map { "\(detail)  ⚠︎ \($0)" } ?? detail,
                               isError: event.error != nil, incoming: false))
@@ -274,6 +275,14 @@ final class AppState: ObservableObject {
         let playing = engine.isPlaying
         if playing != playback.isPlaying { playback.isPlaying = playing }
         if phase.isRunning { playback.now = Date() }
+        // Next cue to fire (published only when it changes).
+        let next: UUID?
+        if mode == .manual {
+            next = cueStack.next?.id
+        } else {
+            next = project.triggers.lazy.filter { $0.enabled && $0.time > t + 0.001 }.min { $0.time < $1.time }?.id
+        }
+        if activity.nextCueID != next { activity.nextCueID = next }
     }
 
     var currentTimecode: Timecode { project.timecode(at: currentTime) }
@@ -656,6 +665,24 @@ final class AppState: ObservableObject {
     /// Adds a predefined trigger's commands to a cue.
     func apply(_ predefined: PredefinedTrigger, to id: UUID) {
         binding(for: id)?.wrappedValue.commands.append(contentsOf: predefined.instantiate())
+    }
+
+    /// Whether a command already exists as (part of) a predefined trigger.
+    func isPredefined(_ command: HogCommand) -> Bool {
+        settings.predefinedTriggers.contains { p in p.commands.contains { $0.isEquivalent(to: command) } }
+    }
+
+    /// Star button on a command: saves it as a one-command predefined trigger, or removes the
+    /// one-command predefined trigger(s) that match it.
+    func togglePredefined(_ command: HogCommand) {
+        let single = settings.predefinedTriggers.filter { $0.commands.count == 1 && $0.commands[0].isEquivalent(to: command) }
+        if !single.isEmpty {
+            settings.predefinedTriggers.removeAll { p in single.contains { $0.id == p.id } }
+        } else if !isPredefined(command) {
+            var copy = command.withNewID()
+            copy.timing = nil
+            settings.predefinedTriggers.append(PredefinedTrigger(name: copy.summary, commands: [copy]))
+        }
     }
 
     /// Saves a cue's commands as a new predefined trigger (Settings › Predefined).

@@ -32,6 +32,8 @@ final class CueActivity: ObservableObject {
     @Published var runningCueIDs: Set<UUID> = []
     /// The cue shown in the inspector: the user's selection, or (with Follow on) the last fired cue.
     @Published var focusedCueID: UUID?
+    /// The cue that fires next (blinks green in the cue list).
+    @Published var nextCueID: UUID?
 }
 
 /// The OSC output log, kept separate for the same reason.

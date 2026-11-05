@@ -26,7 +26,7 @@ struct CueListView: View {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { index, t in
                         row(t, number: index + 1)
                             .id(t.id)
-                            .rowHighlight(highlightColor(t))
+                            .rowHighlight(highlightColor(t), blinking: t.id == activity.nextCueID)
                     }
                 }
                 .listStyle(.inset(alternatesRowBackgrounds: true))
@@ -175,12 +175,26 @@ struct CueListView: View {
         for t in state.project.sortedTriggers where selection.contains(t.id) { state.fire(t) }
     }
 }
+/// Subtle dark-green background for the next cue, on for half a second and off for half a second.
+private struct NextCueBlink: View {
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { context in
+            let on = Int(context.date.timeIntervalSinceReferenceDate * 2) % 2 == 0
+            RoundedRectangle(cornerRadius: 5)
+                .fill(Color(red: 0.10, green: 0.36, blue: 0.20).opacity(on ? 0.7 : 0))
+                .padding(.horizontal, 6)
+        }
+    }
+}
+
 private extension View {
     /// Only replaces the row background when highlighted, so normal rows keep the alternating stripes.
     @ViewBuilder
-    func rowHighlight(_ color: Color?) -> some View {
+    func rowHighlight(_ color: Color?, blinking: Bool) -> some View {
         if let color {
             listRowBackground(RoundedRectangle(cornerRadius: 5).fill(color.opacity(0.6)).padding(.horizontal, 6))
+        } else if blinking {
+            listRowBackground(NextCueBlink())
         } else {
             self
         }
