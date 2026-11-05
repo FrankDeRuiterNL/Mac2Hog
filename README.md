@@ -85,6 +85,10 @@ only changes the audio path and keeps the analysis and cues. Use *Re-analyze* yo
 Run the engine tests with `swift test` (the core engine also builds and tests on Linux).
 Every push builds the app and runs the tests on GitHub Actions; the built `Mac2Hog.app` is attached to the run as an artifact.
 
+**Releases** are published by the *Release* workflow (`.github/workflows/release.yml`): bump `VERSION`, add
+`docs/release-notes/v<version>.md`, then run the workflow from the Actions tab (or push a `v<version>` tag).
+Downloads: [Releases](https://github.com/Frankvandetechniek/Mac2Hog/releases).
+
 ## Setting up the Hog
 
 1. On the console: **Setup → Control Panel → Network** → enable **OSC In** and note the port (Mac2Hog uses 7001 by default).
