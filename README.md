@@ -54,7 +54,7 @@ to the Autosave folder (*File › Show Autosave Folder*). Single-song shows auto
 
 ## Version
 
-Current version: **0.3.0**. Mac2Hog uses [Semantic Versioning](https://semver.org); see [CHANGELOG.md](CHANGELOG.md).
+Current version: **0.4.0**. Mac2Hog uses [Semantic Versioning](https://semver.org); see [CHANGELOG.md](CHANGELOG.md).
 The version is shown in *Settings › About*.
 
 ## Requirements
@@ -100,6 +100,7 @@ Every push builds the app and runs the tests on GitHub Actions; the built `Mac2H
 | Import the Hog showfile / pick a recent one | *File › Import Hog Showfile* (⇧⌘I) or *Settings › Showfile* |
 | Generate cues from parts / breaks / snares / every N bars | **Generate Cues** button |
 | Add a cue | Double-click the waveform, ⌘T at the playhead, or **Start/End/Add trigger** in the *Song Analysis* tab |
+| Zoom the waveform | Pinch on the trackpad, or the zoom slider |
 | Move a cue | Drag its flag on the waveform (snaps to the beat grid), or type a timecode in the inspector |
 | Attach console commands | Select a cue → inspector → **Add** (Go cuelist, goto cue, scene, macro, release, master go, fader, custom OSC) |
 | Same command on all snares | Inspector → *Copy to all Snare cues*, or attach it in Generate Cues |

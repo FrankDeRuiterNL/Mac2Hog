@@ -40,18 +40,14 @@ struct TriggerEditor: View {
                 if trigger.startMode != .timecode {
                     HStack {
                         Text(trigger.startMode == .follow ? "Follow previous cue's start +" : "Wait for previous cue's end +")
-                        TextField("", value: $trigger.delay, format: .number)
-                            .frame(width: 60)
-                            .multilineTextAlignment(.trailing)
+                        SecondsField(value: $trigger.delay)
                         Text("s")
                     }
                     Text(startExplanation).font(.caption).foregroundStyle(.secondary)
                 }
                 HStack {
                     Text("Duration")
-                    TextField("", value: $trigger.duration, format: .number)
-                        .frame(width: 60)
-                        .multilineTextAlignment(.trailing)
+                    SecondsField(value: $trigger.duration)
                     Text("s")
                     Spacer()
                     Text("how long this cue runs (fade time); a next Wait cue starts after it")
@@ -153,7 +149,7 @@ struct TriggerEditor: View {
     }
 
     private var startExplanation: String {
-        let d = trigger.delay == trigger.delay.rounded() ? String(Int(trigger.delay)) : String(format: "%.1f", trigger.delay)
+        let d = SecondsText.format(trigger.delay)
         switch trigger.startMode {
         case .follow: return "Fires \(d) s after the previous cue fired."
         case .wait: return "Fires \(d) s after the previous cue has finished (its start + its duration)."

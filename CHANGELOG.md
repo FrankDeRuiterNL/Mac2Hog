@@ -3,6 +3,11 @@
 Mac2Hog follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The version lives in `VERSION`,
 `Sources/Mac2HogCore/Version.swift` and `Resources/Info.plist` (kept in sync by a unit test) and is bumped on every commit.
 
+## 0.4.0
+- Pinch-to-zoom on the waveform (trackpad); zooms around the playhead when visible, otherwise the centre.
+- Fix: Follow / Wait delay, cue Duration and setlist pause fields accept decimals with a dot or a comma
+  (0.1, 0,10, 1.15) regardless of the Mac's region, with up to two decimals; "Follow +1.15s" now shows both decimals.
+
 ## 0.3.0
 - Fix: playhead no longer hitches when a cue fires. Fired/running cue state and the OSC log live in their own
   observable objects (only the cue list, inspector and log redraw), network status is only published when it

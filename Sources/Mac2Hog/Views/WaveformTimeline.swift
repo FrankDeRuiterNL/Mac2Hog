@@ -9,6 +9,8 @@ struct WaveformTimeline: View {
     @EnvironmentObject var state: AppState
     @State private var viewStart: Double = 0
     @State private var dragMode: DragMode?
+    /// Zoom and anchor at the start of a trackpad pinch.
+    @State private var pinchStart: (zoom: Double, anchorTime: Double, anchorX: CGFloat)?
     @State private var showSnares = true
     @State private var showBeats = true
 
@@ -31,6 +33,7 @@ struct WaveformTimeline: View {
                     .simultaneousGesture(SpatialTapGesture(count: 2).onEnded { v in
                         state.addTrigger(at: time(atX: v.location.x))
                     })
+                    .simultaneousGesture(pinchGesture(width: width))
                     // The playhead is a separate light layer: only it redraws while the song plays.
                     .overlay(PlayheadLayer(viewStart: $viewStart, zoom: state.zoom, visible: visible,
                                            follow: state.followPlayhead).clipped())
@@ -57,7 +60,7 @@ struct WaveformTimeline: View {
             legend(color: .orange, "Snare")
             legend(color: .red.opacity(0.5), "Break")
             legend(color: .accentColor, "Trigger")
-            Text("Double-click to add a trigger · drag flags to move")
+            Text("Double-click to add a trigger · drag flags to move · pinch to zoom")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .toggleStyle(.checkbox)
@@ -82,6 +85,25 @@ struct WaveformTimeline: View {
         state.project.triggers
             .filter { abs(self.x(of: $0.time) - x) < 6 || (y < sectionBand + flagBand && self.x(of: $0.time) <= x && x < self.x(of: $0.time) + 70) }
             .min { abs(self.x(of: $0.time) - x) < abs(self.x(of: $1.time) - x) }
+    }
+
+    /// Trackpad pinch-to-zoom. Zooms around the playhead when it is on screen, otherwise around the centre,
+    /// so the point you're looking at stays put. Same range as the zoom slider.
+    private func pinchGesture(width: CGFloat) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { scale in
+                if pinchStart == nil {
+                    let playheadX = x(of: state.currentTime)
+                    let anchorX = (playheadX >= 0 && playheadX <= width) ? playheadX : width / 2
+                    pinchStart = (state.zoom, viewStart + Double(anchorX) / state.zoom, anchorX)
+                }
+                guard let start = pinchStart else { return }
+                let newZoom = min(512, max(4, start.zoom * Double(scale)))
+                state.zoom = newZoom
+                let maxStart = max(0, state.duration - Double(width) / newZoom)
+                viewStart = min(maxStart, max(0, start.anchorTime - Double(start.anchorX) / newZoom))
+            }
+            .onEnded { _ in pinchStart = nil }
     }
 
     private func dragGesture(width: CGFloat) -> some Gesture {

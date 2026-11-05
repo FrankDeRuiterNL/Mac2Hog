@@ -69,9 +69,7 @@ public struct ShowTrigger: Codable, Hashable, Sendable, Identifiable {
         }
     }
 
-    static func formatSeconds(_ s: Double) -> String {
-        s == s.rounded() ? String(Int(s)) : String(format: "%.1f", s)
-    }
+    static func formatSeconds(_ s: Double) -> String { SecondsText.format(s) }
 
     private enum CodingKeys: String, CodingKey {
         case id, time, name, source, commands, enabled, notes, startMode, delay, duration

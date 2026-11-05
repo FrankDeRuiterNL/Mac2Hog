@@ -113,16 +113,13 @@ struct SetlistSidebar: View {
                 Spacer()
                 if index < set.songs.count - 1 {
                     Image(systemName: "pause.circle")
-                    TextField("", value: Binding(get: { song.gapAfter ?? set.defaultGap },
-                                                 set: { v in state.updateSetlist { s in
-                                                     if let i = s.songs.firstIndex(where: { $0.id == song.id }) {
-                                                         s.songs[i].gapAfter = v == s.defaultGap ? nil : max(0, v)
-                                                     }
-                                                 } }),
-                              format: .number)
-                        .frame(width: 40)
-                        .multilineTextAlignment(.trailing)
-                        .help("Pause after this song (seconds)")
+                    SecondsField(value: Binding(get: { song.gapAfter ?? set.defaultGap },
+                                                set: { v in state.updateSetlist { s in
+                                                    if let i = s.songs.firstIndex(where: { $0.id == song.id }) {
+                                                        s.songs[i].gapAfter = v == s.defaultGap ? nil : max(0, v)
+                                                    }
+                                                } }),
+                                 width: 44)
                     Text("s")
                 }
             }
@@ -143,9 +140,7 @@ struct SetlistSidebar: View {
         HStack {
             Text(title)
             Spacer()
-            TextField("", value: Binding(get: { value }, set: { set(max(0, $0)) }), format: .number)
-                .frame(width: 50)
-                .multilineTextAlignment(.trailing)
+            SecondsField(value: Binding(get: { value }, set: { set(max(0, $0)) }), width: 50)
             Text("s")
         }
     }

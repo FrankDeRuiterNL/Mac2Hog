@@ -115,7 +115,7 @@ final class CueTimingAndSetlistTests: XCTestCase {
         XCTAssertEqual(cues[1].time, 15, accuracy: 1e-9)   // 2 + 3 (duration) + 10
         XCTAssertEqual(cues[3].time, 15, accuracy: 1e-9)   // 10 + 5
         XCTAssertEqual(ShowTrigger(time: 0, name: "x", startMode: .follow, delay: 5).startDescription, "Follow +5s")
-        XCTAssertEqual(ShowTrigger(time: 0, name: "x", startMode: .wait, delay: 2.5).startDescription, "Wait +2.5s")
+        XCTAssertEqual(SecondsText.format(2.5, decimalSeparator: "."), "2.5")
     }
 
     func testCueStackChainFiresFollowersWithDelays() {
@@ -155,5 +155,28 @@ final class CueTimingAndSetlistTests: XCTestCase {
         let a = p.instantiate(), b = p.instantiate()
         XCTAssertNotEqual(a[0].id, b[0].id)
         XCTAssertEqual(a[0].label, "Blackout")
+    }
+}
+
+final class SecondsTextTests: XCTestCase {
+    func testParseDotOrCommaWithTwoDecimals() {
+        XCTAssertEqual(SecondsText.parse("0.1"), 0.1)
+        XCTAssertEqual(SecondsText.parse("0,10"), 0.1)
+        XCTAssertEqual(SecondsText.parse("1.15"), 1.15)
+        XCTAssertEqual(SecondsText.parse("1,15"), 1.15)
+        XCTAssertEqual(SecondsText.parse(" 2 "), 2)
+        XCTAssertEqual(SecondsText.parse("1,5s"), 1.5)
+        XCTAssertEqual(SecondsText.parse("1.234"), 1.23)
+        XCTAssertNil(SecondsText.parse("abc"))
+        XCTAssertNil(SecondsText.parse("1.2.3"))
+        XCTAssertNil(SecondsText.parse(""))
+    }
+
+    func testFormat() {
+        XCTAssertEqual(SecondsText.format(1, decimalSeparator: "."), "1")
+        XCTAssertEqual(SecondsText.format(0.1, decimalSeparator: "."), "0.1")
+        XCTAssertEqual(SecondsText.format(1.15, decimalSeparator: "."), "1.15")
+        XCTAssertEqual(SecondsText.format(1.15, decimalSeparator: ","), "1,15")
+        XCTAssertEqual(SecondsText.format(10, decimalSeparator: ","), "10")
     }
 }
