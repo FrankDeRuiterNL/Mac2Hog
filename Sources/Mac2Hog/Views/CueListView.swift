@@ -89,9 +89,12 @@ struct CueListView: View {
                 Button { state.addTrigger(at: state.currentTime) } label: {
                     Label(state.editingState != nil ? "Add cue" : "Add at playhead", systemImage: "plus")
                 }
-                Button { duplicateSelected() } label: { Label("Duplicate cue", systemImage: "plus.square.on.square") }
-                    .disabled(selection.count != 1)
-                    .help("Duplicate the selected cue directly below it")
+                Button { duplicateSelected() } label: {
+                    Label(state.editingState != nil ? "Duplicate cue" : "Duplicate to playhead", systemImage: "plus.square.on.square")
+                }
+                .disabled(selection.count != 1)
+                .help(state.editingState != nil ? "Duplicate the selected cue directly below it"
+                                                 : "Copy the selected cue to a new cue at the playhead position")
                 Button { state.deleteTriggers(selection) } label: { Label("Delete", systemImage: "trash") }
                     .disabled(selection.isEmpty)
                 Spacer()
@@ -223,7 +226,8 @@ struct CueListView: View {
 
     private func duplicateSelected() {
         guard selection.count == 1, let id = selection.first else { return }
-        state.duplicateTrigger(id)
+        // Setlist states have no song / playhead: duplicate directly below instead.
+        if state.editingState != nil { state.duplicateTrigger(id) } else { state.duplicateTrigger(id, at: state.currentTime) }
         if let new = state.selectedTriggerID { selection = [new] }
     }
 }

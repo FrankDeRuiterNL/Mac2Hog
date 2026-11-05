@@ -653,6 +653,20 @@ final class AppState: ObservableObject {
         if let s = selectedTriggerID, ids.contains(s) { selectedTriggerID = nil }
     }
 
+    /// Copies a cue to a new Timecode cue at `time` (e.g. the playhead), named "Copy of …".
+    func duplicateTrigger(_ id: UUID, at time: Double) {
+        guard let t = project.triggers.first(where: { $0.id == id }) else { return }
+        var copy = t
+        copy.id = UUID()
+        copy.commands = t.commands.map { $0.withNewID() }
+        copy.name = "Copy of \(t.name)"
+        copy.startMode = .timecode   // positioned at the playhead, not chained to the cue before it
+        copy.delay = 0
+        copy.time = max(0, time)
+        project.triggers.append(copy)   // didSet sorts it into place by time
+        selectedTriggerID = copy.id
+    }
+
     func duplicateTrigger(_ id: UUID) {
         guard let t = project.triggers.first(where: { $0.id == id }) else { return }
         var copy = t

@@ -3,6 +3,11 @@
 Mac2Hog follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The version lives in `VERSION`,
 `Sources/Mac2HogCore/Version.swift` and `Resources/Info.plist` (kept in sync by a unit test) and is bumped on every commit.
 
+## 0.8.0
+- Cue list: "Duplicate cue" is now "Duplicate to playhead": the selected cue is copied ("Copy of …") to a new
+  Timecode cue at the current playhead position. In setlist states (no song) it still duplicates directly below.
+  The right-click "Duplicate" still copies directly below the original.
+
 ## 0.7.1
 - Build: CI and Release run on the self-hosted Mac runner; builds use a scratch folder outside the runner's work
   directory and strip Finder/iCloud extended attributes before code signing (`SCRATCH_PATH` in `build-app.sh`).
