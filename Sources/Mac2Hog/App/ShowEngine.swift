@@ -94,10 +94,58 @@ final class ShowEngine: @unchecked Sendable {
 
     var hasAudio: Bool { player != nil }
     var duration: Double { player?.duration ?? 0 }
-    var currentTime: Double { player?.currentTime ?? 0 }
-    var isPlaying: Bool { player?.isPlaying ?? false }
+    var currentTime: Double { silent ? clock.time : (player?.currentTime ?? 0) }
+    var isPlaying: Bool { silent ? clock.running : (player?.isPlaying ?? false) }
+
+    // MARK: Silent clock (Semi-Manual mode)
+
+    /// Real-time song clock without audio: Semi-Manual mode runs the timecode rundown on this instead of
+    /// the audio player, so cues fire exactly as in Timecode mode but nothing is heard.
+    private final class SilentClock: @unchecked Sendable {
+        private let lock = NSLock()
+        private var base: Double = 0
+        private var startedAt: UInt64 = 0
+        private(set) var running = false
+
+        private static func now() -> UInt64 { DispatchTime.now().uptimeNanoseconds }
+
+        var time: Double {
+            lock.lock(); defer { lock.unlock() }
+            return running ? base + Double(Self.now() - startedAt) / 1e9 : base
+        }
+
+        func start() { lock.lock(); startedAt = Self.now(); running = true; lock.unlock() }
+
+        func pause() {
+            lock.lock()
+            if running { base += Double(Self.now() - startedAt) / 1e9 }
+            running = false
+            lock.unlock()
+        }
+
+        func set(_ t: Double) { lock.lock(); base = t; startedAt = Self.now(); lock.unlock() }
+    }
+
+    private let clock = SilentClock()
+    private var silent = false
+
+    /// Switches between audio playback and the silent clock, keeping the song position.
+    func setSilent(_ enabled: Bool) {
+        guard enabled != silent else { return }
+        let position = currentTime
+        pause()
+        silent = enabled
+        if enabled { clock.set(position) } else { player?.currentTime = position }
+        queue.sync { runner.seek(to: position) }
+    }
 
     func play() {
+        if silent {
+            guard player != nil else { return }
+            queue.sync { runner.seek(to: clock.time) }
+            clock.start()
+            return
+        }
         guard let p = player else { return }
         queue.sync { runner.seek(to: p.currentTime) }
         if let ltc = ltcPlayer {
@@ -112,12 +160,15 @@ final class ShowEngine: @unchecked Sendable {
     }
 
     func pause() {
+        if silent { clock.pause(); return }
         player?.pause()
         ltcPlayer?.pause()
     }
 
     func stop() {
         cancelScheduled()
+        clock.pause()
+        clock.set(0)
         player?.stop()
         player?.currentTime = 0
         ltcPlayer?.stop()
@@ -126,6 +177,12 @@ final class ShowEngine: @unchecked Sendable {
     }
 
     func seek(to time: Double) {
+        if silent {
+            let t = max(0, min(time, duration))
+            clock.set(t)
+            queue.sync { runner.seek(to: t) }
+            return
+        }
         guard let p = player else { return }
         let t = max(0, min(time, p.duration))
         let wasPlaying = p.isPlaying
@@ -241,8 +298,20 @@ final class ShowEngine: @unchecked Sendable {
     }
 
     private func tick() {
-        guard let p = player, p.isPlaying else { return }
-        let now = p.currentTime
+        let now: Double
+        if silent {
+            guard clock.running else { return }
+            now = clock.time
+            if duration > 0, now >= duration {
+                // End of the song on the silent clock: behave like the audio reaching its end.
+                clock.pause()
+                clock.set(duration)
+                DispatchQueue.main.async { self.onSongFinished?() }
+            }
+        } else {
+            guard let p = player, p.isPlaying else { return }
+            now = p.currentTime
+        }
         let due = runner.tick(time: now)
         guard autoFire, !due.isEmpty else { return }
         for trigger in due {

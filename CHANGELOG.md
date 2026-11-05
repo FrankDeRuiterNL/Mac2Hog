@@ -3,6 +3,12 @@
 Mac2Hog follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The version lives in `VERSION`,
 `Sources/Mac2HogCore/Version.swift` and `Resources/Info.plist` (kept in sync by a unit test) and is bumped on every commit.
 
+## 0.10.0
+- New **Semi-Manual** mode (top bar, between Timecode and Manual): the timecode rundown runs on a silent clock at
+  real speed — no audio — firing every cue exactly as Timecode mode would (including Follow / Wait and delayed
+  releases). Press **NEXT** (or Space) to start at the first cue or skip to the next cue point; the rundown continues
+  from there with the original timings. PLAY pauses / resumes the rundown.
+
 ## 0.9.0
 - Millumin: Settings › Network has a Millumin section (IP/hostname, OSC input port, status, Apply, Send test
   message); Settings › OSC has "Millumin Message Format" (address prefix, default /m2h; number arguments; key release).

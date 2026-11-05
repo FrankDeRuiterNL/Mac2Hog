@@ -25,7 +25,8 @@ struct TransportBar: View {
                                          title: playTitle)
                 }
                 .buttonStyle(BigTransportButtonStyle(color: .green))
-                .help(state.mode == .timecode ? "Play / pause (Space)" : "Play / pause (⌘↩)")
+                .help(state.mode == .timecode ? "Play / pause (Space)"
+      : state.mode == .semiManual ? "Pause / resume the silent rundown (⌘↩)" : "Play / pause (⌘↩)")
 
                 if state.mode == .manual {
                     Button { state.goNextCue() } label: {
@@ -33,6 +34,12 @@ struct TransportBar: View {
                     }
                     .buttonStyle(BigTransportButtonStyle(color: .green, filled: true))
                     .help("Fire next cue (Space)")
+                } else if state.mode == .semiManual {
+                    Button { state.nextCuePoint() } label: {
+                        TransportButtonLabel(systemImage: "forward.end.fill", title: "NEXT")
+                    }
+                    .buttonStyle(BigTransportButtonStyle(color: .green, filled: true))
+                    .help("Jump to the next cue and continue the rundown from there (Space)")
                 }
 
                 VStack(spacing: 4) {
@@ -87,13 +94,14 @@ struct TransportBar: View {
                     .fixedSize()
                 Picker("Mode", selection: $state.mode) {
                     Text("Timecode").tag(PlaybackMode.timecode)
+                    Text("Semi-Manual").tag(PlaybackMode.semiManual)
                     Text("Manual").tag(PlaybackMode.manual)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .fixedSize()
             }
-            .help("Timecode: cues fire automatically while the song plays. Manual: press Space to fire the next cue.")
+            .help("Timecode: cues fire automatically while the song plays. Semi-Manual: the same rundown without audio; Space / NEXT jumps to the next cue. Manual: Space fires the next cue.")
 
             if let status = state.phaseDescription {
                 Text(status)

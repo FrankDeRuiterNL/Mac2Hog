@@ -6,10 +6,24 @@ import UniformTypeIdentifiers
 import Mac2HogCore
 
 enum PlaybackMode: String, CaseIterable, Identifiable {
-    case timecode, manual
+    case timecode, semiManual, manual
     var id: String { rawValue }
-    var title: String { self == .timecode ? "Timecode (automatic)" : "Manual cue stack (space = GO)" }
-    var short: String { self == .timecode ? "Timecode" : "Manual" }
+    var title: String {
+        switch self {
+        case .timecode: return "Timecode (automatic)"
+        case .semiManual: return "Semi-Manual (silent rundown, space = next cue)"
+        case .manual: return "Manual cue stack (space = GO)"
+        }
+    }
+    var short: String {
+        switch self {
+        case .timecode: return "Timecode"
+        case .semiManual: return "Semi-Manual"
+        case .manual: return "Manual"
+        }
+    }
+    /// Cues fire from the song clock (audio in Timecode, the silent clock in Semi-Manual).
+    var firesOnTimecode: Bool { self != .manual }
 }
 
 /// What is shown in the editor when a setlist is open.
@@ -130,7 +144,13 @@ final class AppState: ObservableObject {
 
     // MARK: Playback
     @Published var mode: PlaybackMode = .timecode {
-        didSet { engine.setAutoFire(mode == .timecode); if mode == .manual { cueStack.reset() } }
+        didSet {
+            engine.setAutoFire(mode.firesOnTimecode)
+            // Semi-Manual runs the rundown on a silent clock instead of the audio.
+            engine.setSilent(mode == .semiManual)
+            if mode == .manual { cueStack.reset() }
+            refreshTransport()
+        }
     }
     var currentTime: Double { playback.currentTime }
     var isPlaying: Bool { playback.isPlaying }
@@ -381,8 +401,29 @@ final class AppState: ObservableObject {
     private func spacePressed() {
         switch mode {
         case .manual: goNextCue()
+        case .semiManual: nextCuePoint()
         case .timecode: togglePlay()
         }
+    }
+
+    // MARK: - Semi-Manual
+
+    /// NEXT (Space) in Semi-Manual mode: jump the silent rundown to the next cue point, fire it and keep
+    /// running from there with the original timings. The first press starts the rundown at the first cue.
+    func nextCuePoint() {
+        guard engine.hasAudio else { alertMessage = "Import a song first."; return }
+        let now = currentTime
+        let fired = activity.lastFiredID
+        let candidates = project.triggers.filter(\.enabled)
+        // While running (or right after a cue fired) the next cue is the one after the playhead; when the
+        // rundown is paused before a cue that hasn't fired yet, that cue itself is next.
+        let next = candidates
+            .filter { isPlaying ? $0.time > now + 0.01 : ($0.time >= now - 0.0005 && $0.id != fired) }
+            .min { $0.time < $1.time }
+        guard let target = next else { NSSound.beep(); return }
+        engine.seek(to: target.time)   // the cue at this time fires on the next tick
+        if !isPlaying { engine.play() }
+        refreshTransport()
     }
 
     // MARK: - Manual cue stack

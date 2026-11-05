@@ -12,6 +12,9 @@ A native macOS app that turns a song into a light show on an **ETC / High End Sy
    on the song timeline. Mac2Hog converts them into the correct Hog OSC messages.
 5. Run the show with the big **STOP** (red) and **PLAY** (green) buttons:
    - **Timecode mode** – press Play (Space) and every cue fires automatically at its timecode.
+   - **Semi-Manual mode** – the same rundown as Timecode mode but silent (no audio): press **NEXT** / **Space** to
+     start at the first cue or skip ahead to the next cue point; the rundown continues from there in real time.
+     PLAY pauses / resumes it.
    - **Manual mode** – the cues form a cue stack; press **GO** / **Space** to fire the next cue.
 6. Or build a **setlist** of several songs that follow each other, with **Starting**, **Waiting** (between songs)
    and **Ending** light states.
@@ -54,7 +57,7 @@ to the Autosave folder (*File › Show Autosave Folder*). Single-song shows auto
 
 ## Version
 
-Current version: **0.9.0**. Mac2Hog uses [Semantic Versioning](https://semver.org); see [CHANGELOG.md](CHANGELOG.md).
+Current version: **0.10.0**. Mac2Hog uses [Semantic Versioning](https://semver.org); see [CHANGELOG.md](CHANGELOG.md).
 The version is shown in *Settings › About*.
 
 ## Requirements
