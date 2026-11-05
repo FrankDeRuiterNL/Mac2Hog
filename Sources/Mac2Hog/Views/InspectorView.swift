@@ -405,7 +405,7 @@ struct CommandEditor: View {
                     set: { setObject($0, objects: objects) })) {
                     ForEach(objects) { Text("\($0.number)  \($0.name)").tag($0.number) }
                     if !objects.contains(where: { $0.number == command.objectNumber }) {
-                        Text("\(command.objectNumber) (not in showfile)").tag(command.objectNumber)
+                        Text("\(command.objectNumber) (not in Hog XML)").tag(command.objectNumber)
                     }
                 }
                 .labelsHidden()
@@ -453,7 +453,7 @@ struct CommandEditor: View {
                     onDecrement: { text.wrappedValue = HogNumber.step(text.wrappedValue, by: -1, existing: existing) })
                 .labelsHidden()
         }
-        .help(existing.isEmpty ? help : "\(help) — arrows step through the showfile")
+        .help(existing.isEmpty ? help : "\(help) — arrows step through the Hog XML")
     }
 }
 

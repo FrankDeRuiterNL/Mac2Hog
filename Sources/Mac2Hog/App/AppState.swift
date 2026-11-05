@@ -59,7 +59,13 @@ final class AppState: ObservableObject {
             if settings.feedbackEnabled != oldValue.feedbackEnabled || settings.feedbackPort != oldValue.feedbackPort {
                 configureFeedback()
             }
-            if settings.ltcOnRightChannel != oldValue.ltcOnRightChannel { reloadPlayer() }
+            if settings.networkInterface != oldValue.networkInterface { configureNetwork() }
+            if settings.mainAudioDeviceUID != oldValue.mainAudioDeviceUID || settings.ltcAudioDeviceUID != oldValue.ltcAudioDeviceUID
+                || settings.ltcChannel != oldValue.ltcChannel
+                || (settings.ltcAudioDeviceUID != nil && (settings.timecodeRate != oldValue.timecodeRate
+                                                          || settings.timecodeStartHour != oldValue.timecodeStartHour)) {
+                reloadPlayer()
+            }
             if editingState == nil,
                settings.timecodeRate != oldValue.timecodeRate || settings.timecodeStartHour != oldValue.timecodeStartHour {
                 project.timecodeRate = settings.timecodeRate
@@ -194,9 +200,11 @@ final class AppState: ObservableObject {
 
     func configureNetwork() {
         do {
-            try engine.configure(host: settings.consoleHost, port: settings.consolePort, mapper: mapper,
+            try engine.configure(host: settings.consoleHost, port: settings.consolePort,
+                                 interface: settings.networkInterface, mapper: mapper,
                                  latency: settings.latencyCompensationMs / 1000)
             networkStatus = "Sending to \(settings.consoleHost):\(settings.consolePort)"
+                + (settings.networkInterface.map { " via \($0)" } ?? "")
             networkOK = true
         } catch {
             networkStatus = error.localizedDescription
@@ -378,6 +386,7 @@ final class AppState: ObservableObject {
     }
 
     func importSong(_ url: URL, analyze: Bool = true) {
+        settings.remember(project: url.path)
         project.songPath = url.path
         if project.name == "Untitled" { project.name = url.deletingPathExtension().lastPathComponent }
         settings.remember(song: url.path)
@@ -481,27 +490,34 @@ final class AppState: ObservableObject {
         }
         let url = URL(fileURLWithPath: path)
         do {
-            let player: AVAudioPlayer
-            if settings.ltcOnRightChannel {
-                let audio = try decodedAudio ?? AudioDecoder.decode(url: url)
-                decodedAudio = audio
-                let ltc = LTCEncoder.render(start: project.timecodeStart, duration: audio.duration,
-                                            sampleRate: audio.sampleRate, amplitude: 0.4)
-                var stereo = [Float](repeating: 0, count: audio.samples.count * 2)
-                for i in 0..<audio.samples.count {
-                    stereo[2 * i] = audio.samples[i]
-                    stereo[2 * i + 1] = i < ltc.count ? ltc[i] : 0
-                }
-                player = try AVAudioPlayer(data: WAVDecoder.encode16(samples: stereo, sampleRate: Int(audio.sampleRate), channels: 2))
-            } else {
-                player = try AVAudioPlayer(contentsOf: url)
+            let player = try AVAudioPlayer(contentsOf: url)
+            if let uid = settings.mainAudioDeviceUID { player.currentDevice = uid }
+            var ltcPlayer: AVAudioPlayer?
+            if let uid = settings.ltcAudioDeviceUID {
+                // LTC for the whole song on its own output device (Settings › Hardware).
+                let data = ltcData(duration: player.duration + 1)
+                let ltc = try AVAudioPlayer(data: data)
+                ltc.currentDevice = uid
+                ltcPlayer = ltc
             }
-            engine.load(player: player)
+            engine.load(player: player, ltc: ltcPlayer)
             duration = player.duration
             refreshTransport()
         } catch {
             alertMessage = "Could not open \(url.lastPathComponent): \(error.localizedDescription)"
         }
+    }
+
+    private var ltcCache: (key: String, data: Data)?
+
+    /// 48 kHz stereo WAV with LTC on the chosen channel(s), cached for the current start / rate / length.
+    private func ltcData(duration: Double) -> Data {
+        let key = "\(project.timecodeStart)|\(project.timecodeRate.rawValue)|\(Int(duration.rounded(.up)))|\(settings.ltcChannel.rawValue)"
+        if let cache = ltcCache, cache.key == key { return cache.data }
+        let samples = LTCEncoder.render(start: project.timecodeStart, duration: duration.rounded(.up), sampleRate: 48_000, amplitude: 0.5)
+        let data = WAVDecoder.encode16(samples: settings.ltcChannel.stereo(samples), sampleRate: 48_000, channels: 2)
+        ltcCache = (key, data)
+        return data
     }
 
     func analyze(completion: (() -> Void)? = nil) {
@@ -575,7 +591,7 @@ final class AppState: ObservableObject {
         for ext in ["shw", "hog4", "tsv"] { if let t = UTType(filenameExtension: ext) { types.append(t) } }
         panel.allowedContentTypes = types
         panel.allowsOtherFileTypes = true
-        panel.message = "Choose a Hog show export (.xml), a CSV list, or a show file"
+        panel.message = "Choose a Hog XML export (.xml) or a CSV list"
         if panel.runModal() == .OK, let url = panel.url { loadShowfile(url) }
     }
 
@@ -642,9 +658,17 @@ final class AppState: ObservableObject {
         var copy = t
         copy.id = UUID()
         copy.commands = t.commands.map { $0.withNewID() }
-        copy.name += " copy"
-        if copy.startMode == .timecode { copy.time += 60 / (project.analysis?.bpm ?? 120) }
-        if let i = project.triggers.firstIndex(where: { $0.id == id }) { project.triggers.insert(copy, at: i + 1) } else { project.triggers.append(copy) }
+        copy.name = "Copy of \(t.name)"
+        if let i = project.triggers.firstIndex(where: { $0.id == id }) {
+            // Directly below the original; for a Timecode cue below its Follow / Wait chain, which stays attached to it.
+            var j = i + 1
+            if copy.startMode == .timecode {
+                while j < project.triggers.count, project.triggers[j].startMode != .timecode { j += 1 }
+            }
+            project.triggers.insert(copy, at: j)
+        } else {
+            project.triggers.append(copy)
+        }
         selectedTriggerID = copy.id
     }
 
@@ -733,6 +757,7 @@ final class AppState: ObservableObject {
                 setlist = set
                 selection = nil
                 projectURL = url
+                settings.remember(project: url.path)
                 if let show = set.songs.compactMap(\.project.show).first { currentShow = show }
                 selectInternal(set.songs.first.map { .song($0.id) } ?? .state(.starting))
                 let missing = set.songs.compactMap(\.project.songPath).filter { !FileManager.default.fileExists(atPath: $0) }
@@ -748,6 +773,7 @@ final class AppState: ObservableObject {
             selection = nil
             project = p
             projectURL = url
+            settings.remember(project: url.path)
             decodedAudio = nil
             if let show = p.show { currentShow = show }
             settings.timecodeRate = p.timecodeRate
@@ -769,6 +795,7 @@ final class AppState: ObservableObject {
         do {
             if let set = setlist { try set.encoded().write(to: url, options: .atomic) }
             else { try project.encoded().write(to: url, options: .atomic) }
+            settings.remember(project: url.path)
             isDirty = false
         } catch { alertMessage = "Save failed: \(error.localizedDescription)" }
     }
@@ -836,8 +863,22 @@ final class AppState: ObservableObject {
             DispatchQueue.main.async {
                 guard let self, ok else { return }
                 self.lastAutosave = Date()
+                // Untitled setlists show up in Recent projects via their autosave file.
+                if !savedToDocument, self.settings.recentProjects.first != url.path { self.settings.remember(project: url.path) }
                 if savedToDocument { self.isDirty = false }
             }
+        }
+    }
+
+    /// Opens an entry of Recent projects: a setlist / show document or a song.
+    func openRecent(_ path: String) {
+        let url = URL(fileURLWithPath: path)
+        let ext = url.pathExtension.lowercased()
+        if ext == Setlist.fileExtension || ext == ShowProject.fileExtension {
+            guard confirmDiscard() else { return }
+            openProject(url)
+        } else {
+            importSong(url)
         }
     }
 

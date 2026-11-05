@@ -153,21 +153,21 @@ struct EmptyStateView: View {
             }
             HStack(spacing: 12) {
                 Button { state.openProjectPanel() } label: { Label("Open Show or Setlist…", systemImage: "folder") }
-                Button { state.importShowfilePanel() } label: { Label("Import Showfile…", systemImage: "square.and.arrow.down") }
+                Button { state.importShowfilePanel() } label: { Label("Import Hog XML…", systemImage: "square.and.arrow.down") }
             }
             .controlSize(.large)
-            if !state.settings.recentSongs.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Recent songs").font(.headline)
-                    ForEach(state.settings.recentSongs.prefix(6), id: \.self) { path in
-                        Button(URL(fileURLWithPath: path).lastPathComponent) { state.importSong(URL(fileURLWithPath: path)) }
-                            .buttonStyle(.link)
+            if !state.settings.recentProjects.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Recent projects").font(.headline)
+                    ForEach(state.settings.recentProjects.prefix(8), id: \.self) { path in
+                        RecentProjectRow(path: path) { state.openRecent(path) }
                     }
                 }
+                .frame(maxWidth: 520, alignment: .leading)
                 .padding(.top, 8)
             }
             if let show = state.project.show {
-                Label("Showfile loaded: \(show.name) (\(show.objects.count) objects)", systemImage: "checkmark.circle")
+                Label("Hog XML loaded: \(show.name) (\(show.objects.count) objects)", systemImage: "checkmark.circle")
                     .foregroundStyle(.green)
             }
         }
@@ -178,6 +178,39 @@ struct EmptyStateView: View {
 #endif
 
 #if os(macOS)
+/// One entry in Recent projects: setlist, show or song, with its folder; missing files are disabled.
+struct RecentProjectRow: View {
+    let path: String
+    let open: () -> Void
+
+    private var url: URL { URL(fileURLWithPath: path) }
+    private var exists: Bool { FileManager.default.fileExists(atPath: path) }
+    private var kind: (icon: String, label: String) {
+        switch url.pathExtension.lowercased() {
+        case Setlist.fileExtension: return ("music.note.list", "Setlist")
+        case ShowProject.fileExtension: return ("doc.text", "Show")
+        default: return ("music.note", "Song")
+        }
+    }
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: 8) {
+                Image(systemName: kind.icon).frame(width: 18).foregroundStyle(Color.accentColor)
+                Text(url.deletingPathExtension().lastPathComponent).lineLimit(1)
+                Text(kind.label).font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Text(exists ? url.deletingLastPathComponent().lastPathComponent : "missing")
+                    .font(.caption).foregroundStyle(exists ? Color.secondary : Color.red).lineLimit(1)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!exists)
+        .help(path)
+    }
+}
+
 struct SessionChoice: View {
     let icon: String
     let title: String

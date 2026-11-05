@@ -89,21 +89,10 @@ struct CueListView: View {
                 Button { state.addTrigger(at: state.currentTime) } label: {
                     Label(state.editingState != nil ? "Add cue" : "Add at playhead", systemImage: "plus")
                 }
-                if !state.settings.predefinedTriggers.isEmpty {
-                    Menu {
-                        ForEach(state.settings.predefinedTriggers) { p in
-                            Button(p.name) {
-                                let t = state.addTrigger(at: state.currentTime, name: p.name)
-                                state.apply(p, to: t.id)
-                            }
-                        }
-                    } label: { Label("Add predefined", systemImage: "star") }
-                    .fixedSize()
-                    .help("Add a new cue that sends a predefined trigger")
-                }
+                Button { duplicateSelected() } label: { Label("Duplicate cue", systemImage: "plus.square.on.square") }
+                    .disabled(selection.count != 1)
+                    .help("Duplicate the selected cue directly below it")
                 Button { state.deleteTriggers(selection) } label: { Label("Delete", systemImage: "trash") }
-                    .disabled(selection.isEmpty)
-                Button { fireSelected() } label: { Label("Fire selected", systemImage: "bolt.fill") }
                     .disabled(selection.isEmpty)
                 Spacer()
                 Text("\(rows.count) cues · \(rows.filter { $0.commands.isEmpty }.count) without commands")
@@ -232,8 +221,10 @@ struct CueListView: View {
         }
     }
 
-    private func fireSelected() {
-        for t in state.project.sortedTriggers where selection.contains(t.id) { state.fire(t) }
+    private func duplicateSelected() {
+        guard selection.count == 1, let id = selection.first else { return }
+        state.duplicateTrigger(id)
+        if let new = state.selectedTriggerID { selection = [new] }
     }
 }
 /// Subtle dark-green background for the next cue, on for half a second and off for half a second.

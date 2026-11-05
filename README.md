@@ -54,7 +54,7 @@ to the Autosave folder (*File › Show Autosave Folder*). Single-song shows auto
 
 ## Version
 
-Current version: **0.6.0**. Mac2Hog uses [Semantic Versioning](https://semver.org); see [CHANGELOG.md](CHANGELOG.md).
+Current version: **0.7.0**. Mac2Hog uses [Semantic Versioning](https://semver.org); see [CHANGELOG.md](CHANGELOG.md).
 The version is shown in *Settings › About*.
 
 ## Requirements
@@ -97,7 +97,7 @@ Every push builds the app and runs the tests on GitHub Actions; the built `Mac2H
 |---|---|
 | Import song / pick a recent one | *File › Import Song* (⌘I) or *Settings › Song* |
 | Correct the tempo (×2, ÷2, type a BPM, shift bar start) | Tempo field in the transport bar, *Song Analysis* tab |
-| Import the Hog showfile / pick a recent one | *File › Import Hog Showfile* (⇧⌘I) or *Settings › Showfile* |
+| Import the Hog XML / pick a recent one | *File › Import Hog XML…* (⇧⌘I) or *Settings › Hog XML* |
 | Generate cues from parts / breaks / snares / every N bars | **Generate Cues** button |
 | Add a cue | Double-click the waveform, ⌘T at the playhead, or **Start/End/Add trigger** in the *Song Analysis* tab |
 | Zoom / scroll the waveform | Pinch on the trackpad (or the zoom slider); swipe with two fingers to scroll |
@@ -111,12 +111,16 @@ Every push builds the app and runs the tests on GitHub Actions; the built `Mac2H
 | Save | *File › Save Show* (⌘S) – `.mac2hog` project (single song) or `.mac2hogset` (setlist) |
 | Export | Cue sheet CSV, LTC WAV, or song + LTC stereo WAV |
 
+### Hardware
+
+*Settings › Hardware* selects the audio output for the song, a separate audio output (and channel) for the
+generated LTC timecode, and the network adapter (Ethernet / Wi-Fi) used to send OSC to the console.
+
 ### Timecode / LTC
 
 Mac2Hog fires cues itself from its internal timecode clock (a 4 ms high-priority timer locked to audio
-playback) and has a latency compensation setting. If you also want the Hog to chase timecode, enable
-*Settings › Timecode › Play LTC on the right channel* (song on the left) and feed the right channel into the
-Hog's LTC input, or export an LTC WAV.
+playback) and has a latency compensation setting. If you also want the Hog to chase timecode, choose an
+LTC output device (and channel) in *Settings › Hardware* and connect it to the Hog's LTC input, or export an LTC WAV.
 
 ## Hog OSC mapping
 

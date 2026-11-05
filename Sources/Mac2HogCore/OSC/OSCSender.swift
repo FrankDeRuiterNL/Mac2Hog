@@ -9,13 +9,14 @@ import Glibc
 /// so it behaves identically on macOS and in Linux CI.
 public final class OSCSender: @unchecked Sendable {
     public enum SocketError: Error, LocalizedError {
-        case resolve(String), socket(Int32), send(Int32), bind(Int32)
+        case resolve(String), socket(Int32), send(Int32), bind(Int32), interface(String)
         public var errorDescription: String? {
             switch self {
             case .resolve(let host): return "Could not resolve host \(host)"
             case .socket(let e): return "Socket error \(e): \(String(cString: strerror(e)))"
             case .send(let e): return "Send failed \(e): \(String(cString: strerror(e)))"
             case .bind(let e): return "Bind failed \(e): \(String(cString: strerror(e)))"
+            case .interface(let name): return "Network adapter \(name) is not available"
             }
         }
     }
@@ -26,7 +27,8 @@ public final class OSCSender: @unchecked Sendable {
     private var address = sockaddr_in()
     private let lock = NSLock()
 
-    public init(host: String, port: UInt16) throws {
+    /// `interface`: BSD name of the adapter to send from (e.g. "en7"); nil = system routing.
+    public init(host: String, port: UInt16, interface: String? = nil) throws {
         self.host = host
         self.port = port
         #if canImport(Darwin)
@@ -37,6 +39,16 @@ public final class OSCSender: @unchecked Sendable {
         guard fd >= 0 else { throw SocketError.socket(errno) }
         var yes: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &yes, socklen_t(MemoryLayout<Int32>.size))
+        if let name = interface, !name.isEmpty {
+            var index = Int32(bitPattern: if_nametoindex(name))
+            guard index != 0 else { close(fd); fd = -1; throw SocketError.interface(name) }
+            #if canImport(Darwin)
+            // IP_BOUND_IF (25): send only through this adapter.
+            setsockopt(fd, IPPROTO_IP, 25, &index, socklen_t(MemoryLayout<Int32>.size))
+            #else
+            _ = index
+            #endif
+        }
         address = try Self.resolve(host: host, port: port)
     }
 

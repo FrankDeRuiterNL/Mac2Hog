@@ -37,6 +37,18 @@ public struct AppSettings: Codable, Hashable, Sendable {
     // Predefined triggers (reusable command sets)
     public var predefinedTriggers: [PredefinedTrigger] = []
 
+    /// Recently opened setlists (.mac2hogset), shows (.mac2hog) and single songs, newest first.
+    public var recentProjects: [String] = []
+
+    // Hardware
+    /// Core Audio device UID for the song; nil = system default output.
+    public var mainAudioDeviceUID: String?
+    /// Core Audio device UID for the generated LTC timecode; nil = no LTC output.
+    public var ltcAudioDeviceUID: String?
+    public var ltcChannel: LTCChannel = .both
+    /// BSD name of the network adapter for OSC (e.g. "en0"); nil = automatic (system routing).
+    public var networkInterface: String?
+
     public init() {}
 
     public var analyzerOptions: AudioAnalyzer.Options {
@@ -53,6 +65,12 @@ public struct AppSettings: Codable, Hashable, Sendable {
         recentSongs.removeAll { $0 == path }
         recentSongs.insert(path, at: 0)
         recentSongs = Array(recentSongs.prefix(20))
+    }
+
+    public mutating func remember(project path: String) {
+        recentProjects.removeAll { $0 == path }
+        recentProjects.insert(path, at: 0)
+        recentProjects = Array(recentProjects.prefix(12))
     }
 
     public mutating func remember(showfile path: String) {
@@ -83,5 +101,34 @@ public struct AppSettings: Codable, Hashable, Sendable {
         recentShowfiles = (try? c.decode([String].self, forKey: .recentShowfiles)) ?? d.recentShowfiles
         selectedShowfile = try? c.decode(String.self, forKey: .selectedShowfile)
         predefinedTriggers = (try? c.decode([PredefinedTrigger].self, forKey: .predefinedTriggers)) ?? d.predefinedTriggers
+        // Older settings had only recent songs: start the project list from those.
+        recentProjects = (try? c.decode([String].self, forKey: .recentProjects)) ?? Array(recentSongs.prefix(12))
+        mainAudioDeviceUID = try? c.decode(String.self, forKey: .mainAudioDeviceUID)
+        ltcAudioDeviceUID = try? c.decode(String.self, forKey: .ltcAudioDeviceUID)
+        ltcChannel = (try? c.decode(LTCChannel.self, forKey: .ltcChannel)) ?? d.ltcChannel
+        networkInterface = try? c.decode(String.self, forKey: .networkInterface)
+    }
+}
+
+/// Which channel(s) of the LTC output device carry the timecode.
+public enum LTCChannel: String, Codable, CaseIterable, Sendable, Identifiable {
+    case both, left, right
+    public var id: String { rawValue }
+    public var displayName: String {
+        switch self {
+        case .both: return "Left + Right"
+        case .left: return "Left (channel 1)"
+        case .right: return "Right (channel 2)"
+        }
+    }
+
+    /// Interleaved stereo with the LTC signal on the selected channel(s).
+    public func stereo(_ ltc: [Float]) -> [Float] {
+        var out = [Float](repeating: 0, count: ltc.count * 2)
+        for i in 0..<ltc.count {
+            if self != .right { out[2 * i] = ltc[i] }
+            if self != .left { out[2 * i + 1] = ltc[i] }
+        }
+        return out
     }
 }

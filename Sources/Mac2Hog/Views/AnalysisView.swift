@@ -126,10 +126,10 @@ struct ShowObjectsView: View {
                     Text("\(show.objects(of: .cuelist).count) cuelists · \(show.objects(of: .scene).count) scenes · \(show.objects(of: .macro).count) macros")
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
-                    Text("No showfile imported").foregroundStyle(.secondary)
+                    Text("No Hog XML loaded").foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Import Showfile…") { state.importShowfilePanel() }
+                Button("Import Hog XML…") { state.importShowfilePanel() }
             }
             .padding(8)
             Picker("", selection: $kind) {

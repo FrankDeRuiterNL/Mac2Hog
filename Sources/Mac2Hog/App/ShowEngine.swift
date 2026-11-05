@@ -45,8 +45,8 @@ final class ShowEngine: @unchecked Sendable {
 
     // MARK: Configuration
 
-    func configure(host: String, port: UInt16, mapper: HogOSCMapper, latency: Double) throws {
-        let newSender = try OSCSender(host: host, port: port)
+    func configure(host: String, port: UInt16, interface: String?, mapper: HogOSCMapper, latency: Double) throws {
+        let newSender = try OSCSender(host: host, port: port, interface: interface)
         queue.sync {
             self.sender = newSender
             self.mapper = mapper
@@ -64,7 +64,13 @@ final class ShowEngine: @unchecked Sendable {
 
     // MARK: Transport (call from main)
 
-    func load(player: AVAudioPlayer?) {
+    /// Second player carrying the LTC timecode on its own output device; follows the song player.
+    private var ltcPlayer: AVAudioPlayer?
+
+    func load(player: AVAudioPlayer?, ltc: AVAudioPlayer? = nil) {
+        ltcPlayer?.stop()
+        ltcPlayer = ltc
+        ltcPlayer?.prepareToPlay()
         queue.sync {
             self.player?.stop()
             self.player = player
@@ -82,22 +88,41 @@ final class ShowEngine: @unchecked Sendable {
     func play() {
         guard let p = player else { return }
         queue.sync { runner.seek(to: p.currentTime) }
-        p.play()
+        if let ltc = ltcPlayer {
+            // Start both players at the same moment (slightly in the future) so the timecode lines up.
+            ltc.currentTime = min(p.currentTime, ltc.duration)
+            let lead = 0.05
+            p.play(atTime: p.deviceCurrentTime + lead)
+            ltc.play(atTime: ltc.deviceCurrentTime + lead)
+        } else {
+            p.play()
+        }
     }
 
-    func pause() { player?.pause() }
+    func pause() {
+        player?.pause()
+        ltcPlayer?.pause()
+    }
 
     func stop() {
         cancelScheduled()
         player?.stop()
         player?.currentTime = 0
+        ltcPlayer?.stop()
+        ltcPlayer?.currentTime = 0
         queue.sync { runner.seek(to: 0) }
     }
 
     func seek(to time: Double) {
         guard let p = player else { return }
         let t = max(0, min(time, p.duration))
+        let wasPlaying = p.isPlaying
         p.currentTime = t
+        if let ltc = ltcPlayer {
+            ltc.currentTime = min(t, ltc.duration)
+            // Re-align the timecode with the song after a jump.
+            if wasPlaying { ltc.pause(); p.pause(); play() }
+        }
         queue.sync { runner.seek(to: t) }
     }
 

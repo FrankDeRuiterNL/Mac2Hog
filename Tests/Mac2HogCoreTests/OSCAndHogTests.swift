@@ -142,3 +142,25 @@ final class CommandTimingTests: XCTestCase {
         XCTAssertNil(decoded.timing)
     }
 }
+
+final class HardwareSettingsTests: XCTestCase {
+    func testSubnetCheck() {
+        let i = NetworkInterface(name: "en7", address: "192.168.1.20", netmask: "255.255.255.0")
+        XCTAssertTrue(i.reaches("192.168.1.177"))
+        XCTAssertFalse(i.reaches("10.0.0.5"))
+        _ = NetworkInterface.all()   // must not crash
+    }
+
+    func testLTCChannels() {
+        XCTAssertEqual(LTCChannel.left.stereo([1, -1]), [1, 0, -1, 0])
+        XCTAssertEqual(LTCChannel.right.stereo([1]), [0, 1])
+        XCTAssertEqual(LTCChannel.both.stereo([1]), [1, 1])
+    }
+
+    func testRecentProjectsMigratesFromRecentSongs() throws {
+        let s = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"recentSongs":["/a.mp3","/b.wav"]}"#.utf8))
+        XCTAssertEqual(s.recentProjects, ["/a.mp3", "/b.wav"])
+        XCTAssertNil(s.ltcAudioDeviceUID)
+        XCTAssertNil(s.networkInterface)
+    }
+}

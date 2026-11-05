@@ -3,6 +3,17 @@
 Mac2Hog follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The version lives in `VERSION`,
 `Sources/Mac2HogCore/Version.swift` and `Resources/Info.plist` (kept in sync by a unit test) and is bumped on every commit.
 
+## 0.7.0
+- Start screen: "Recent projects" lists recently opened/saved setlists and shows (and single songs); untitled
+  setlists appear via their autosave file. Missing files are greyed out.
+- "Showfile" is now called "Hog XML" everywhere (File › Import Hog XML…, start screen, Settings › Hog XML with
+  "Loaded Hog XML" / "Recent XML's", Show Objects tab).
+- Settings › Hardware: audio output device for the song, a separate output device and channel for live LTC
+  timecode (played in sync with the song), and the network adapter used for OSC (with subnet check).
+  Replaces the old "Play LTC on the right audio channel" option.
+- Cue list: "Duplicate cue" button (copy named "Copy of …" directly below the selected cue) replaces
+  "Fire selected" and "Add predefined".
+
 ## 0.6.0
 - Cue list: cues with a timed Release show it in the Start column, e.g. "TC+ ↩︎ 0,4s" (blue icon and delay;
   "W" for Wait releases); the release is no longer repeated in Console commands.

@@ -10,12 +10,13 @@ struct SettingsView: View {
             OSCSettings().tabItem { Label("OSC", systemImage: "dot.radiowaves.left.and.right") }
             TimecodeSettings().tabItem { Label("Timecode", systemImage: "clock") }
             SongSettings().tabItem { Label("Song", systemImage: "music.note") }
-            ShowfileSettings().tabItem { Label("Showfile", systemImage: "doc.richtext") }
+            ShowfileSettings().tabItem { Label("Hog XML", systemImage: "doc.richtext") }
+            HardwareSettings().tabItem { Label("Hardware", systemImage: "hifispeaker") }
             PredefinedSettings().tabItem { Label("Predefined", systemImage: "star") }
             AboutSettings().tabItem { Label("About", systemImage: "info.circle") }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { CopyrightFooter() }
-        .frame(width: 720, height: 590)
+        .frame(width: 780, height: 600)
     }
 }
 
@@ -202,7 +203,11 @@ struct TimecodeSettings: View {
                     .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
             Section {
-                Toggle("Play LTC on the right audio channel (song on the left)", isOn: $state.settings.ltcOnRightChannel)
+                HStack {
+                    Text("Live LTC output")
+                    Spacer()
+                    Text(ltcDeviceName).foregroundStyle(.secondary)
+                }
                 HStack {
                     Button("Export LTC WAV…") { state.exportLTC(includeSong: false) }
                     Button("Export song + LTC WAV…") { state.exportLTC(includeSong: true) }
@@ -211,11 +216,106 @@ struct TimecodeSettings: View {
             } header: {
                 Text("Linear timecode output")
             } footer: {
-                Text("Mac2Hog fires the cues itself over OSC from its internal timecode clock. The LTC options are for when you also want the Hog (via its LTC input) to chase the same timecode, for example to run timecode-triggered cuelists on the console.")
+                Text("Mac2Hog fires the cues itself over OSC from its internal timecode clock. LTC is for when you also want the Hog (via its LTC input) to chase the same timecode. Choose the LTC output device in Settings › Hardware.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+extension TimecodeSettings {
+    var ltcDeviceName: String {
+        guard let uid = state.settings.ltcAudioDeviceUID else { return "Off" }
+        return AudioDevices.outputs().first { $0.uid == uid }?.name ?? "Unavailable device"
+    }
+}
+
+/// Audio outputs (song and LTC) and the network adapter used for OSC.
+struct HardwareSettings: View {
+    @EnvironmentObject var state: AppState
+    @State private var devices: [AudioOutputDevice] = []
+    @State private var adapters: [NetworkInterface] = []
+    @State private var adapterNames: [String: String] = [:]
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Song (main audio)", selection: $state.settings.mainAudioDeviceUID) {
+                    Text("System default output").tag(String?.none)
+                    ForEach(devices) { Text(deviceLabel($0)).tag(String?.some($0.uid)) }
+                    missingTag(state.settings.mainAudioDeviceUID)
+                }
+                Picker("Timecode (LTC)", selection: $state.settings.ltcAudioDeviceUID) {
+                    Text("Off").tag(String?.none)
+                    ForEach(devices) { Text(deviceLabel($0)).tag(String?.some($0.uid)) }
+                    missingTag(state.settings.ltcAudioDeviceUID)
+                }
+                Picker("LTC channel", selection: $state.settings.ltcChannel) {
+                    ForEach(LTCChannel.allCases) { Text($0.displayName).tag($0) }
+                }
+                .disabled(state.settings.ltcAudioDeviceUID == nil)
+            } header: {
+                Text("Audio outputs")
+            } footer: {
+                Text("The song plays on the main output. When an LTC output is chosen, Mac2Hog plays SMPTE timecode for the song (\(state.project.timecodeRate.displayName), starting at \(state.project.timecodeStart.description)) on that device in sync with the song, e.g. into the Hog's LTC input. Use a separate device or channel so the timecode isn't heard on the PA. Changing outputs stops playback.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section {
+                Picker("Adapter", selection: $state.settings.networkInterface) {
+                    Text("Automatic (system routing)").tag(String?.none)
+                    ForEach(adapters) { a in Text(adapterLabel(a)).tag(String?.some(a.name)) }
+                    if let name = state.settings.networkInterface, !adapters.contains(where: { $0.name == name }) {
+                        Text("\(name) (not connected)").tag(String?.some(name))
+                    }
+                }
+                ForEach(adapters) { a in
+                    HStack {
+                        Image(systemName: a.reaches(state.settings.consoleHost) ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(a.reaches(state.settings.consoleHost) ? Color.green : Color.secondary)
+                        Text(adapterNames[a.name] ?? a.name)
+                        Text(a.name).font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(a.address) / \(a.netmask)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                }
+                HStack {
+                    Circle().fill(state.networkOK ? Color.green : Color.red).frame(width: 9, height: 9)
+                    Text(state.networkStatus).font(.caption)
+                    Spacer()
+                    Button("Refresh") { refresh() }
+                }
+            } header: {
+                Text("Network adapter (Ethernet / Wi-Fi)")
+            } footer: {
+                Text("OSC to the console (\(state.settings.consoleHost)) is sent through the chosen adapter. A green check marks adapters on the same subnet as the console.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear(perform: refresh)
+    }
+
+    private func refresh() {
+        devices = AudioDevices.outputs()
+        adapters = NetworkInterface.all()
+        adapterNames = NetworkAdapters.displayNames()
+    }
+
+    private func deviceLabel(_ d: AudioOutputDevice) -> String {
+        "\(d.name)  (\(d.channels) ch)"
+    }
+
+    private func adapterLabel(_ a: NetworkInterface) -> String {
+        "\(adapterNames[a.name] ?? a.name) — \(a.name) · \(a.address)"
+    }
+
+    @ViewBuilder
+    private func missingTag(_ uid: String?) -> some View {
+        if let uid, !devices.contains(where: { $0.uid == uid }) {
+            Text("Unavailable device").tag(String?.some(uid))
+        }
     }
 }
 
@@ -494,7 +594,7 @@ struct ShowfileSettings: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     } else {
-                        Text("No showfile loaded").foregroundStyle(.secondary)
+                        Text("No Hog XML loaded").foregroundStyle(.secondary)
                     }
                     Spacer()
                     Button("Import…") { state.importShowfilePanel() }
@@ -503,12 +603,12 @@ struct ShowfileSettings: View {
                     }
                 }
             } header: {
-                Text("Current showfile")
+                Text("Loaded Hog XML")
             } footer: {
                 Text("Supported: Hog XML exports (in Hog OS open the Cuelist, Scene or Macro directory, select the items and choose Export), CSV lists (type,number,name[,cue,cue name]) and saved Mac2Hog libraries. Native .shw files are binary databases that can only be opened by Hog OS — export them to XML first.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Recent showfiles") {
+            Section("Recent XML's") {
                 if state.settings.recentShowfiles.isEmpty { Text("None").foregroundStyle(.secondary) }
                 ForEach(state.settings.recentShowfiles, id: \.self) { path in
                     HStack {
