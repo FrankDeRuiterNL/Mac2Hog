@@ -133,11 +133,11 @@ struct TriggerEditor: View {
                 HStack {
                     Text("Cue")
                     Spacer()
-                    Button(role: .destructive) { state.deleteTriggers([trigger.id]) } label: {
+                    Button { state.deleteTriggers([trigger.id]) } label: {
                         Image(systemName: "trash")
                     }
                     .buttonStyle(.borderless)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.primary)   // white in dark mode
                     .help("Delete this cue")
                 }
             }

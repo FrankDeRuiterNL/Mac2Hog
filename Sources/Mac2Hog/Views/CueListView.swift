@@ -7,11 +7,38 @@ struct CueListView: View {
     @EnvironmentObject var state: AppState
     @EnvironmentObject var activity: CueActivity
     @State private var selection = Set<UUID>()
+    /// Hidden columns (right-click the column titles to change). Type is hidden by default.
+    @AppStorage("Mac2Hog.cueList.hiddenColumns") private var hiddenColumnsRaw = CueColumn.type.rawValue
 
     // Column widths shared by the header and the rows (flexible columns: Name, Console commands).
     private enum W {
-        static let status: CGFloat = 18, number: CGFloat = 30, timecode: CGFloat = 96, start: CGFloat = 92
+        static let status: CGFloat = 18, number: CGFloat = 30, timecode: CGFloat = 96, start: CGFloat = 132
         static let type: CGFloat = 86, on: CGFloat = 28
+    }
+
+    enum CueColumn: String, CaseIterable, Identifiable {
+        case number, timecode, start, name, type, commands, on
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .number: return "#"
+            case .timecode: return "Timecode"
+            case .start: return "Start"
+            case .name: return "Name"
+            case .type: return "Type"
+            case .commands: return "Console commands"
+            case .on: return "On"
+            }
+        }
+    }
+
+    private var hiddenColumns: Set<String> { Set(hiddenColumnsRaw.split(separator: ",").map(String.init)) }
+    private func shows(_ column: CueColumn) -> Bool { column == .name || !hiddenColumns.contains(column.rawValue) }
+
+    private func setColumn(_ column: CueColumn, visible: Bool) {
+        var hidden = hiddenColumns
+        if visible { hidden.remove(column.rawValue) } else { hidden.insert(column.rawValue) }
+        hiddenColumnsRaw = hidden.sorted().joined(separator: ",")
     }
 
     var body: some View {
@@ -90,40 +117,72 @@ struct CueListView: View {
     private var header: some View {
         HStack(spacing: 8) {
             Spacer().frame(width: W.status, height: 0)
-            Text("#").frame(width: W.number, alignment: .trailing)
-            Text("Timecode").frame(width: W.timecode, alignment: .leading)
-            Text("Start").frame(width: W.start, alignment: .leading)
+            if shows(.number) { Text("#").frame(width: W.number, alignment: .trailing) }
+            if shows(.timecode) { Text("Timecode").frame(width: W.timecode, alignment: .leading) }
+            if shows(.start) { Text("Start").frame(width: W.start, alignment: .leading) }
             Text("Name").frame(minWidth: 80, maxWidth: .infinity, alignment: .leading)
-            Text("Type").frame(width: W.type, alignment: .leading)
-            Text("Console commands").frame(minWidth: 140, maxWidth: .infinity, alignment: .leading)
-            Text("On").frame(width: W.on)
+            if shows(.type) { Text("Type").frame(width: W.type, alignment: .leading) }
+            if shows(.commands) { Text("Console commands").frame(minWidth: 140, maxWidth: .infinity, alignment: .leading) }
+            if shows(.on) { Text("On").frame(width: W.on) }
         }
         .font(.callout.weight(.semibold))
         .foregroundStyle(.secondary)
         .padding(.horizontal, 18)
         .padding(.vertical, 5)
+        .contentShape(Rectangle())
+        .contextMenu {
+            Text("Columns")
+            ForEach(CueColumn.allCases) { column in
+                Toggle(column.title, isOn: Binding(get: { shows(column) }, set: { setColumn(column, visible: $0) }))
+                    .disabled(column == .name)
+            }
+        }
+        .help("Right-click to show or hide columns")
     }
 
     private func row(_ t: ShowTrigger, number: Int) -> some View {
         HStack(spacing: 8) {
             statusIcon(t).frame(width: W.status)
-            Text("\(number)").monospacedDigit().frame(width: W.number, alignment: .trailing)
-            Text(state.project.timecode(at: t.time).description).font(.body.monospacedDigit())
-                .frame(width: W.timecode, alignment: .leading)
-            Text(t.startDescription)
-                .foregroundStyle(t.startMode == .timecode ? Color.secondary : Color.orange)
-                .frame(width: W.start, alignment: .leading)
+            if shows(.number) { Text("\(number)").monospacedDigit().frame(width: W.number, alignment: .trailing) }
+            if shows(.timecode) {
+                Text(state.project.timecode(at: t.time).description).font(.body.monospacedDigit())
+                    .frame(width: W.timecode, alignment: .leading)
+            }
+            if shows(.start) { startCell(t).frame(width: W.start, alignment: .leading) }
             Text(t.name).foregroundStyle(t.enabled ? Color.primary : Color.secondary)
                 .lineLimit(1)
                 .frame(minWidth: 80, maxWidth: .infinity, alignment: .leading)
-            Text(t.source.displayName).foregroundStyle(.secondary).lineLimit(1)
-                .frame(width: W.type, alignment: .leading)
-            commandsText(t).frame(minWidth: 140, maxWidth: .infinity, alignment: .leading)
-            Toggle("", isOn: Binding(get: { t.enabled }, set: { v in state.binding(for: t.id)?.wrappedValue.enabled = v }))
-                .labelsHidden()
-                .frame(width: W.on)
+            if shows(.type) {
+                Text(t.source.displayName).foregroundStyle(.secondary).lineLimit(1)
+                    .frame(width: W.type, alignment: .leading)
+            }
+            if shows(.commands) { commandsText(t).frame(minWidth: 140, maxWidth: .infinity, alignment: .leading) }
+            if shows(.on) {
+                Toggle("", isOn: Binding(get: { t.enabled }, set: { v in state.binding(for: t.id)?.wrappedValue.enabled = v }))
+                    .labelsHidden()
+                    .frame(width: W.on)
+            }
         }
         .lineLimit(1)
+    }
+
+    /// Start type, plus the blue release icon and its delay when the cue has a timed Release command,
+    /// e.g. "TC+ ↩︎ 0,4s" (Wait releases show "W" before the value).
+    @ViewBuilder
+    private func startCell(_ t: ShowTrigger) -> some View {
+        if let release = t.commands.first(where: { $0.action == .release && $0.timing != nil }), let timing = release.timing {
+            HStack(spacing: 3) {
+                Text(t.startMode == .timecode ? "TC+" : "\(t.startDescription) +")
+                    .foregroundStyle(t.startMode == .timecode ? Color.secondary : Color.orange)
+                Image(systemName: "arrow.uturn.backward.circle.fill").foregroundStyle(.blue)
+                Text((timing.mode == .wait ? "W " : "") + "\(SecondsText.format(timing.seconds))s")
+                    .foregroundStyle(.blue)
+            }
+            .help("\(release.summary) — \(timing.mode == .wait ? "after the cue's Duration" : "after the cue fires")")
+        } else {
+            Text(t.startDescription)
+                .foregroundStyle(t.startMode == .timecode ? Color.secondary : Color.orange)
+        }
     }
 
     /// Red = running (within its duration), purple = last fired, nil = normal row.
@@ -147,7 +206,9 @@ struct CueListView: View {
     }
 
     private func commandsText(_ t: ShowTrigger) -> some View {
-        Text(t.commands.isEmpty ? "—" : t.commands.map(\.summary).joined(separator: ", "))
+        // Timed releases are shown in the Start column instead.
+        let shown = t.commands.filter { !($0.action == .release && $0.timing != nil) }
+        return Text(shown.isEmpty ? "—" : shown.map(\.summary).joined(separator: ", "))
             .foregroundStyle(t.commands.isEmpty ? Color.secondary : Color.primary)
             .lineLimit(1)
     }

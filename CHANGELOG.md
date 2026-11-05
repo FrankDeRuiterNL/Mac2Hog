@@ -3,6 +3,12 @@
 Mac2Hog follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The version lives in `VERSION`,
 `Sources/Mac2HogCore/Version.swift` and `Resources/Info.plist` (kept in sync by a unit test) and is bumped on every commit.
 
+## 0.6.0
+- Cue list: cues with a timed Release show it in the Start column, e.g. "TC+ ↩︎ 0,4s" (blue icon and delay;
+  "W" for Wait releases); the release is no longer repeated in Console commands.
+- Cue list: right-click the column titles to show or hide columns (remembered). Type is hidden by default.
+- Cue inspector: delete-cue trash icon is white instead of red.
+
 ## 0.5.0
 - Release button (blue ↩︎) on a Go of a cuelist or scene: adds the matching Release below it, with its own
   Follow / Wait timing (Follow = seconds after the cue fires, Wait = after the cue's Duration). Commands with a
