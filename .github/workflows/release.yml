@@ -20,6 +20,10 @@ jobs:
   release:
     # Frank's self-hosted MacBook runner. Releases only run from manual dispatch or tag pushes on this repo.
     runs-on: self-hosted
+    env:
+      # Build outside the runner's work folder (it may live in an iCloud-synced folder like ~/Documents,
+      # whose Finder metadata makes codesign fail).
+      SCRATCH_PATH: /tmp/mac2hog-ci-build
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,7 +38,9 @@ jobs:
           echo "VERSION=$V" >> "$GITHUB_ENV"
 
       - name: Test
-        run: swift test
+        run: |
+          xattr -cr . 2>/dev/null || true
+          swift test --scratch-path "$SCRATCH_PATH"
 
       - name: Build app bundle
         run: ./scripts/build-app.sh

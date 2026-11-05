@@ -3,6 +3,11 @@
 Mac2Hog follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The version lives in `VERSION`,
 `Sources/Mac2HogCore/Version.swift` and `Resources/Info.plist` (kept in sync by a unit test) and is bumped on every commit.
 
+## 0.7.1
+- Build: CI and Release run on the self-hosted Mac runner; builds use a scratch folder outside the runner's work
+  directory and strip Finder/iCloud extended attributes before code signing (`SCRATCH_PATH` in `build-app.sh`).
+- Remove an always-false branch in the waveform drawing (compiler warning).
+
 ## 0.7.0
 - Start screen: "Recent projects" lists recently opened/saved setlists and shows (and single songs); untitled
   setlists appear via their autosave file. Missing files are greyed out.

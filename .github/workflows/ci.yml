@@ -9,6 +9,10 @@ jobs:
   macos:
     # Frank's self-hosted MacBook runner (faster than waiting for a GitHub macOS runner).
     runs-on: self-hosted
+    env:
+      # Build outside the runner's work folder (it may live in an iCloud-synced folder like ~/Documents,
+      # whose Finder metadata makes codesign fail).
+      SCRATCH_PATH: /tmp/mac2hog-ci-build
     # Never run pull requests from forks on the self-hosted machine.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
@@ -16,9 +20,13 @@ jobs:
       - name: Swift version
         run: swift --version
       - name: Build
-        run: swift build -c release
+        run: |
+          xattr -cr . 2>/dev/null || true
+          swift build -c release --scratch-path "$SCRATCH_PATH"
       - name: Test
-        run: swift test
+        run: |
+          xattr -cr . 2>/dev/null || true
+          swift test --scratch-path "$SCRATCH_PATH"
       - name: Package app bundle
         run: ./scripts/build-app.sh
       - uses: actions/upload-artifact@v4

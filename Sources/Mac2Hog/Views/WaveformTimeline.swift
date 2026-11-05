@@ -233,8 +233,8 @@ struct WaveformTimeline: View {
         for t in state.project.triggers where t.time >= viewStart - 10 && t.time <= visibleEnd {
             let tx = x(of: t.time)
             let selected = t.id == state.selectedTriggerID
-            let fired = false  // fired / running state is shown in the cue list (keeps the waveform from redrawing on every cue)
-            let color: Color = !t.enabled ? .gray : (fired ? .green : (selected ? .yellow : .accentColor))
+            // Fired / running state is shown in the cue list (keeps the waveform from redrawing on every cue).
+            let color: Color = !t.enabled ? .gray : (selected ? .yellow : .accentColor)
             ctx.stroke(Path { p in p.move(to: CGPoint(x: tx, y: sectionBand)); p.addLine(to: CGPoint(x: tx, y: size.height - 14)) },
                        with: .color(color),
                        style: StrokeStyle(lineWidth: selected ? 2.5 : 1.5, dash: t.startMode == .timecode ? [] : [4, 3]))
