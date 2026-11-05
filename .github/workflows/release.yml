@@ -54,15 +54,22 @@ jobs:
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
           echo "SHA=$(cut -d' ' -f1 "$ZIP.sha256")" >> "$GITHUB_ENV"
 
-      - name: Publish release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Prepare release notes
         run: |
-          NOTES=$(mktemp)
+          NOTES="$RUNNER_TEMP/release-notes.md"
           cat "docs/release-notes/v$VERSION.md" > "$NOTES"
           printf '\n---\n\n**SHA-256** `%s`  %s\n' "$SHA" "$ZIP" >> "$NOTES"
-          gh release create "v$VERSION" "build/$ZIP" "build/$ZIP.sha256" \
-            --title "Mac2Hog $VERSION" \
-            --notes-file "$NOTES" \
-            --target "$GITHUB_SHA" \
-            --latest
+          echo "NOTES=$NOTES" >> "$GITHUB_ENV"
+
+      # Uses the GitHub API directly, so the runner doesn't need the gh CLI installed.
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Mac2Hog ${{ env.VERSION }}
+          body_path: ${{ env.NOTES }}
+          target_commitish: ${{ github.sha }}
+          make_latest: "true"
+          files: |
+            build/${{ env.ZIP }}
+            build/${{ env.ZIP }}.sha256
