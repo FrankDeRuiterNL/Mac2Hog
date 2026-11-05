@@ -83,7 +83,8 @@ foreground layer for a future Icon Composer (`.icon`) version; see `Resources/Ap
 only changes the audio path and keeps the analysis and cues. Use *Re-analyze* yourself if the file is a different version.
 
 Run the engine tests with `swift test` (the core engine also builds and tests on Linux).
-Every push builds the app and runs the tests on GitHub Actions; the built `Mac2Hog.app` is attached to the run as an artifact.
+Every push builds the app and runs the tests on GitHub Actions (macOS jobs run on a self-hosted Mac runner, `runs-on: self-hosted`;
+pull requests from forks are not run there); the built `Mac2Hog.app` is attached to the run as an artifact.
 
 **Releases** are published by the *Release* workflow (`.github/workflows/release.yml`): bump `VERSION`, add
 `docs/release-notes/v<version>.md`, then run the workflow from the Actions tab (or push a `v<version>` tag).

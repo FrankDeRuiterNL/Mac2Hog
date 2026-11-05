@@ -18,7 +18,8 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-latest
+    # Frank's self-hosted MacBook runner. Releases only run from manual dispatch or tag pushes on this repo.
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
         with:
